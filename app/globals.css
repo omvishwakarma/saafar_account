@@ -1,0 +1,72 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: light;
+}
+
+body {
+  background:
+    radial-gradient(1200px 500px at 10% -10%, rgba(184, 80, 31, 0.08), transparent 50%),
+    radial-gradient(900px 400px at 100% 0%, rgba(15, 110, 86, 0.07), transparent 45%),
+    #f3efe6;
+}
+
+table.books {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.875rem;
+}
+
+table.books th {
+  text-align: left;
+  font-size: 0.68rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: #6d655b;
+  font-weight: 650;
+  padding: 0.65rem 0.75rem;
+  border-bottom: 1px solid #e5dccb;
+  white-space: nowrap;
+}
+
+table.books td {
+  padding: 0.72rem 0.75rem;
+  border-bottom: 1px solid #efe7d8;
+  vertical-align: middle;
+}
+
+table.books tbody tr:hover td {
+  background: #faf6ee;
+}
+
+table.books .num,
+.num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+table.books tfoot td {
+  font-weight: 700;
+  border-top: 1px solid #1c1915;
+  border-bottom: none;
+}
+
+input[type="number"]::-webkit-outer-spin-button,
+input[type="number"]::-webkit-inner-spin-button {
+  margin: 0;
+}
+
+@media print {
+  aside,
+  .no-print {
+    display: none !important;
+  }
+  body {
+    background: white;
+  }
+  main {
+    padding: 0 !important;
+  }
+}
