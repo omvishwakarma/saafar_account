@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { PartnerLedgerActions } from "@/components/PartnerLedgerActions";
 import { ReportSheet } from "@/components/ReportChrome";
 import { Money, When } from "@/components/ui";
@@ -53,18 +54,18 @@ export default async function PartnerLedgerPage({
                   <colgroup>
                     <col style={{ width: showUsd ? "11%" : "12%" }} />
                     <col style={{ width: showUsd ? "13%" : "14%" }} />
-                    <col style={{ width: showUsd ? "18%" : "22%" }} />
-                    <col style={{ width: showUsd ? "16%" : "18%" }} />
-                    {showUsd && <col style={{ width: "11%" }} />}
-                    <col style={{ width: showUsd ? "11%" : "12%" }} />
+                    <col style={{ width: showUsd ? "14%" : "16%" }} />
+                    <col style={{ width: showUsd ? "24%" : "26%" }} />
+                    {showUsd && <col style={{ width: "10%" }} />}
                     <col style={{ width: showUsd ? "10%" : "11%" }} />
-                    <col style={{ width: showUsd ? "10%" : "11%" }} />
+                    <col style={{ width: showUsd ? "9%" : "10%" }} />
+                    <col style={{ width: showUsd ? "9%" : "11%" }} />
                   </colgroup>
                   <thead>
                     <tr>
                       <th>Date</th>
                       <th>Ref</th>
-                      <th>Account</th>
+                      <th>Guest</th>
                       <th>Detail</th>
                       {showUsd && <th className="num">USD</th>}
                       <th className="num">Debit</th>
@@ -76,9 +77,9 @@ export default async function PartnerLedgerPage({
                     {section.lines.map((line, index) => (
                       <tr key={index}>
                         <td><When value={line.date} /></td>
-                        <td>{line.ref}</td>
-                        <td>{line.account}</td>
-                        <td>{line.label}</td>
+                        <td>{line.href ? <Link href={line.href} className="font-semibold text-brass hover:underline">{line.ref}</Link> : line.ref}</td>
+                        <td className="wrap">{line.guest}</td>
+                        <td className="wrap">{line.label}</td>
                         {showUsd && <td className="num text-muted">{line.usd ? <Money amount={line.usd} currency="USD" /> : ""}</td>}
                         <td className="num">{line.debit ? <Money amount={line.debit} /> : ""}</td>
                         <td className="num">{line.credit ? <Money amount={line.credit} /> : ""}</td>

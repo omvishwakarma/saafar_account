@@ -231,6 +231,14 @@ const UserSchema = new Schema(
   { timestamps: true },
 );
 
+const HotelNameSchema = new Schema(
+  {
+    key: { type: String, required: true, unique: true },
+    name: { type: String, required: true },
+  },
+  { timestamps: true },
+);
+
 const AuditSchema = new Schema({
   at: { type: Date, required: true, index: true },
   username: { type: String, required: true },
@@ -261,6 +269,7 @@ export const Counter = model("Counter", CounterSchema);
 export const Meta = model("Meta", MetaSchema);
 export const User = model("User", UserSchema);
 export const AuditLog = model("AuditLog", AuditSchema);
+export const HotelName = model("HotelName", HotelNameSchema);
 
 export async function nextNumber(prefix: string) {
   const year = new Date().getFullYear();

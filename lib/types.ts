@@ -80,6 +80,8 @@ export type VoucherDetails = {
   nationality: string;
   visaType: string;
   activityName: string;
+  hotelCity: string;
+  hotelName: string;
 };
 
 export type VoucherInput = {

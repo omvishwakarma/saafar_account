@@ -76,6 +76,12 @@ table.books.ledger td.num {
   text-align: right;
 }
 
+table.books.ledger td.wrap {
+  white-space: normal;
+  overflow: visible;
+  text-overflow: clip;
+}
+
 input[type="number"]::-webkit-outer-spin-button,
 input[type="number"]::-webkit-inner-spin-button {
   margin: 0;

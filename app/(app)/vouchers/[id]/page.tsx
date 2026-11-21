@@ -154,6 +154,8 @@ function serviceFacts(voucher: {
     ];
   }
   return [
+    { label: "City", value: details.hotelCity || "—" },
+    { label: "Hotel", value: details.hotelName || "—" },
     { label: "Stay", value: `${voucher.checkIn || "—"} → ${voucher.checkOut || "—"}` },
     { label: "Nights", value: String(voucher.nights) },
     { label: "Guests", value: guests },

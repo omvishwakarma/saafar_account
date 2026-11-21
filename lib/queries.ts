@@ -767,6 +767,56 @@ export async function reportLedger(accountId: string, asOf: string) {
   return { account: serializeAccount(account), asOf, lines, balance };
 }
 
+function shownDate(value: unknown) {
+  if (!value) return "";
+  const text = formatDate(value as string | Date);
+  return text === "—" ? "" : text;
+}
+
+function detailParts(...values: unknown[]) {
+  return values.map((value) => String(value || "").trim()).filter(Boolean).join(" · ");
+}
+
+function isDocRef(value: string) {
+  return /^[A-Z]{2,6}-\d{4}-\d+$/.test(value.trim());
+}
+
+function readableDetail(value: string, ref = "") {
+  const text = value.trim();
+  if (!text || text === ref.trim() || isDocRef(text)) return "";
+  if (/^(Service fee|From voucher|Tax)\b/i.test(text)) return "";
+  return text;
+}
+
+function ledgerServiceDetail(voucher: {
+  service?: string;
+  checkIn?: Date | string | null;
+  checkOut?: Date | string | null;
+  details?: Record<string, unknown> | null;
+}) {
+  const details = voucher.details || {};
+  const service = String(voucher.service || "HOTEL").trim().toUpperCase();
+  if (service === "FLIGHT") {
+    const flight = [details.airline, details.flightNo].map((value) => String(value || "").trim()).filter(Boolean).join(" ");
+    const from = String(details.from || "").trim();
+    const to = String(details.to || "").trim();
+    const route = from && to ? `${from} → ${to}` : from || to;
+    return detailParts(flight, route);
+  }
+  if (service === "ACTIVITY") return detailParts(details.activityName, shownDate(voucher.checkIn));
+  if (service === "TRANSFER") {
+    const pickup = String(details.pickup || "").trim();
+    const dropoff = String(details.dropoff || "").trim();
+    const route = pickup && dropoff ? `${pickup} → ${dropoff}` : pickup || dropoff || String(details.vehicle || "").trim();
+    return detailParts(route, shownDate(voucher.checkIn));
+  }
+  if (service === "VISA") return detailParts(details.country, details.visaType);
+  const checkIn = shownDate(voucher.checkIn);
+  const checkOut = shownDate(voucher.checkOut);
+  const stay = checkIn && checkOut ? `${checkIn} – ${checkOut}` : checkIn || checkOut;
+  return detailParts(details.hotelName, stay);
+}
+
 export async function reportPartner(partnerId: string, asOf: string) {
   await boot();
   const partner = mongoose.isValidObjectId(partnerId) ? await Partner.findById(partnerId).lean() : null;
@@ -774,10 +824,24 @@ export async function reportPartner(partnerId: string, asOf: string) {
   if (!partner) {
     return { partner: null, partners: partners.map(serializePartner), asOf, sections: [] as never[] };
   }
-  const accounts = await Account.find().lean();
+  const [accounts, entries, vouchers, linkedMoves] = await Promise.all([
+    Account.find().lean(),
+    JournalEntry.find({ date: { $lte: endOf(asOf) } }).sort({ date: 1, createdAt: 1 }).lean(),
+    Voucher.find({ $or: [{ invoiceId: { $ne: null } }, { billId: { $ne: null } }] })
+      .select("number paxName service checkIn checkOut details invoiceId billId")
+      .lean(),
+    Move.find().select("number origin lines.label").lean(),
+  ]);
+  const voucherByNumber = new Map(vouchers.map((voucher) => [voucher.number, voucher]));
+  const voucherByMoveId = new Map<string, (typeof vouchers)[number]>();
+  for (const voucher of vouchers) {
+    if (voucher.invoiceId) voucherByMoveId.set(String(voucher.invoiceId), voucher);
+    if (voucher.billId) voucherByMoveId.set(String(voucher.billId), voucher);
+  }
+  const moveById = new Map(linkedMoves.map((move) => [String(move._id), move]));
+  const moveByNumber = new Map(linkedMoves.map((move) => [move.number, move]));
   const accountOf = new Map(accounts.map((account) => [String(account._id), account]));
-  const entries = await JournalEntry.find({ date: { $lte: endOf(asOf) } }).sort({ date: 1, createdAt: 1 }).lean();
-  const groups = new Map<string, { title: string; lines: { date: string; ref: string; account: string; label: string; usd: number; debit: number; credit: number; balance: number }[] }>();
+  const groups = new Map<string, { title: string; lines: { date: string; ref: string; href: string; guest: string; label: string; usd: number; debit: number; credit: number; balance: number }[] }>();
   const running = new Map<string, number>();
   for (const entry of entries) {
     for (const line of entry.lines) {
@@ -791,12 +855,30 @@ export async function reportPartner(partnerId: string, asOf: string) {
       const prev = running.get(key) || 0;
       const next = round(prev + line.debit - line.credit, 3);
       running.set(key, next);
+      const move = moveById.get(sid(entry.sourceId)) || moveByNumber.get(line.label || "") || moveByNumber.get(entry.ref);
+      const voucher = (move && voucherByMoveId.get(String(move._id))) || (move?.origin ? voucherByNumber.get(move.origin) : undefined);
+      const serviceDetail = voucher ? ledgerServiceDetail(voucher) : "";
+      const described = (move?.lines || []).map((row) => readableDetail(row.label || "", move?.number || "")).find(Boolean) || "";
+      const sourceId = sid(entry.sourceId);
+      const href =
+        entry.source === "payment" && sourceId
+          ? `/payments/${sourceId}`
+          : entry.source === "receipt" && sourceId
+            ? `/receipts/${sourceId}`
+            : entry.source === "voucher" && sourceId
+              ? `/vouchers/${sourceId}`
+              : voucher
+                ? `/vouchers/${String(voucher._id)}`
+                : entry.source === "invoice" && sourceId
+                  ? `/moves/${sourceId}`
+                  : "";
       const group = groups.get(key) || { title, lines: [] };
       group.lines.push({
         date: isoDate(entry.date),
         ref: entry.ref,
-        account: `${account.code} · ${account.name}`,
-        label: line.label || entry.memo || "",
+        href,
+        guest: voucher?.paxName || "",
+        label: serviceDetail || described || readableDetail(line.label || entry.memo || "", entry.ref),
         usd: line.currency === "USD" ? line.amountCurrency || 0 : 0,
         debit: line.debit,
         credit: line.credit,

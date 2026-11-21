@@ -6,6 +6,7 @@ import { actionDeleteVoucher, actionSaveVoucher } from "@/lib/actions";
 import { formatMoney, nightsBetween, todayISO, voucherFigures } from "@/lib/money";
 import type { CurrencyRow, PartnerRow, VoucherInput } from "@/lib/types";
 import { AirlineSelect } from "./AirlineSelect";
+import { HotelNameSelect } from "./HotelNameSelect";
 import { Button, Field, inputClass } from "./ui";
 
 const services = ["HOTEL", "FLIGHT", "TRANSFER", "VISA", "ACTIVITY"];
@@ -33,6 +34,8 @@ const emptyDetails = {
   nationality: "",
   visaType: "Tourist",
   activityName: "",
+  hotelCity: "",
+  hotelName: "",
 };
 
 export function VoucherForm({
@@ -296,7 +299,7 @@ function relevantDetails(service: string, details: typeof emptyDetails) {
           ? ["country", "nationality", "visaType"]
           : service === "ACTIVITY"
             ? ["activityName", "qty"]
-            : ["qty", "transfers", "timeLimit", "hotelService"];
+            : ["hotelCity", "hotelName", "qty", "transfers", "timeLimit", "hotelService"];
   return Object.fromEntries(keys.map((key) => [key, details[key as keyof typeof details]]));
 }
 
@@ -311,6 +314,10 @@ function serviceHint(service: string) {
 function StayFields({ form, patch, detail }: { form: FormState; patch: (partial: Partial<FormState>) => void; detail: (partial: Partial<typeof emptyDetails>) => void }) {
   return (
     <>
+      <Field label="City"><input className={inputClass} value={form.details.hotelCity} onChange={(event) => detail({ hotelCity: event.target.value })} placeholder="Hotel city" /></Field>
+      <div className="md:col-span-2">
+        <Field label="Hotel name"><HotelNameSelect value={form.details.hotelName} onChange={(hotelName) => detail({ hotelName })} /></Field>
+      </div>
       <Field label="Check in">
         <input className={inputClass} type="date" value={form.checkIn} onChange={(event) => patch({ checkIn: event.target.value, nights: nightsBetween(event.target.value, form.checkOut) })} />
       </Field>

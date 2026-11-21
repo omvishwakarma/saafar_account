@@ -9,7 +9,7 @@ import { formatDate, formatMoney } from "./money";
 type Line = {
   date: string;
   ref: string;
-  account: string;
+  guest: string;
   label: string;
   usd: number;
   debit: number;
@@ -32,14 +32,14 @@ function subtitle(asOf: string) {
 }
 
 function headers(showUsd: boolean) {
-  return ["Date", "Ref", "Account", "Detail", ...(showUsd ? ["USD"] : []), "Debit", "Credit", "Balance"];
+  return ["Date", "Ref", "Guest", "Detail", ...(showUsd ? ["USD"] : []), "Debit", "Credit", "Balance"];
 }
 
 function pdfRow(line: Line, showUsd: boolean) {
   return [
     formatDate(line.date),
     line.ref,
-    line.account,
+    line.guest,
     line.label,
     ...(showUsd ? [line.usd ? formatMoney(line.usd, "USD") : ""] : []),
     line.debit ? formatMoney(line.debit) : "",
@@ -83,8 +83,8 @@ export function buildPartnerLedgerPdf(report: PartnerLedgerFile) {
       styles: { fontSize: 8, cellPadding: 4, textColor: [28, 25, 21], lineColor: [229, 220, 203], lineWidth: 0.4 },
       headStyles: { fillColor: [246, 241, 231], textColor: [109, 101, 91], fontStyle: "bold" },
       columnStyles: showUsd
-        ? { 4: { halign: "right" }, 5: { halign: "right" }, 6: { halign: "right" }, 7: { halign: "right" } }
-        : { 4: { halign: "right" }, 5: { halign: "right" }, 6: { halign: "right" } },
+        ? { 2: { cellWidth: 80 }, 3: { cellWidth: 190 }, 4: { halign: "right" }, 5: { halign: "right" }, 6: { halign: "right" }, 7: { halign: "right" } }
+        : { 2: { cellWidth: 90 }, 3: { cellWidth: 210 }, 4: { halign: "right" }, 5: { halign: "right" }, 6: { halign: "right" } },
     });
     y = (doc as jsPDF & { lastAutoTable?: { finalY: number } }).lastAutoTable?.finalY ?? y;
     y += 22;
@@ -144,7 +144,7 @@ export async function buildPartnerLedgerXlsx(report: PartnerLedgerFile) {
       const values: (string | number | null)[] = [
         formatDate(line.date),
         line.ref,
-        line.account,
+        line.guest,
         line.label,
         ...(showUsd ? [line.usd || null] : []),
         line.debit || null,
@@ -173,8 +173,8 @@ export async function buildPartnerLedgerXlsx(report: PartnerLedgerFile) {
   sheet.columns = [
     { width: 16 },
     { width: 18 },
-    { width: 32 },
-    { width: 36 },
+    { width: 24 },
+    { width: 46 },
     { width: 16 },
     { width: 16 },
     { width: 18 },
