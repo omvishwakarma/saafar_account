@@ -31,14 +31,16 @@ export function AsOfForm({ asOf, from, to, extra }: { asOf?: string; from?: stri
 export function ReportSheet({
   title,
   subtitle,
+  wide = false,
   children,
 }: {
   title: string;
   subtitle: string;
+  wide?: boolean;
   children: React.ReactNode;
 }) {
   return (
-    <article className="mx-auto max-w-4xl rounded-2xl border border-line bg-paper px-6 py-8 shadow-card print:border-0 print:shadow-none md:px-10">
+    <article className={`${wide ? "max-w-none" : "mx-auto max-w-4xl"} rounded-2xl border border-line bg-paper px-6 py-8 shadow-card print:border-0 print:shadow-none md:px-10`}>
       <header className="mb-6 text-center">
         <div className="text-[11px] font-semibold uppercase tracking-[0.2em] text-muted">{company.name}</div>
         <h1 className="mt-1 font-display text-4xl">{title}</h1>

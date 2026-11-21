@@ -62,6 +62,25 @@ export type ReceiptInput = {
   post?: boolean;
 };
 
+export type VoucherDetails = {
+  qty: string;
+  transfers: string;
+  timeLimit: string;
+  hotelService: string;
+  from: string;
+  to: string;
+  airline: string;
+  flightNo: string;
+  pnr: string;
+  cabin: string;
+  pickup: string;
+  dropoff: string;
+  vehicle: string;
+  country: string;
+  nationality: string;
+  visaType: string;
+};
+
 export type VoucherInput = {
   id?: string;
   date: string;
@@ -84,6 +103,7 @@ export type VoucherInput = {
   roomType: string;
   roomCategory: string;
   roomView: string;
+  details?: Partial<VoucherDetails>;
   supplierFc: number;
   supplierCurrency: string;
   supRoe: number;

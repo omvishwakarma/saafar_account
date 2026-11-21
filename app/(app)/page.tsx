@@ -12,7 +12,7 @@ export default async function DashboardPage() {
         eyebrow={formatDate(data.today)}
         title="Dashboard"
         sub={`${company.short} keeps sales, supplier costs, and bank balances in ${company.base}. Foreign amounts are translated at the rate on each document.`}
-        action={<Link href="/vouchers/new" className="rounded-md bg-brass px-3.5 py-2 text-sm font-semibold text-white">New hotel voucher</Link>}
+        action={<Link href="/vouchers/new" className="rounded-md bg-brass px-3.5 py-2 text-sm font-semibold text-white">New Voucher</Link>}
       />
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <Stat label="Customers owe" value={data.receivable} hint="Open invoices less credit notes" href="/reports/aged-receivable" />

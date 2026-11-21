@@ -153,6 +153,7 @@ const VoucherSchema = new Schema(
     roomType: { type: String, default: "" },
     roomCategory: { type: String, default: "" },
     roomView: { type: String, default: "" },
+    details: { type: Schema.Types.Mixed, default: {} },
     supplierFc: { type: Number, default: 0 },
     supplierCurrency: { type: String, default: "KWD" },
     supRoe: { type: Number, default: 1 },
@@ -222,6 +223,9 @@ const MetaSchema = new Schema({
 export type MoveDoc = InferSchemaType<typeof MoveSchema> & { _id: mongoose.Types.ObjectId };
 
 function model<T>(name: string, schema: Schema) {
+  if (process.env.NODE_ENV !== "production" && mongoose.models[name]) {
+    mongoose.deleteModel(name);
+  }
   return (mongoose.models[name] as mongoose.Model<T>) || mongoose.model<T>(name, schema);
 }
 

@@ -9,6 +9,29 @@ import { Button, Field, inputClass } from "./ui";
 
 const services = ["HOTEL", "FLIGHT", "TRANSFER", "VISA", "ACTIVITY"];
 const payModes = ["Credit", "Bank", "Cash", "Card"];
+const meals = ["RO", "BB", "HB", "FB", "AI"];
+const hotelServices = ["Room", "Extra bed", "Meal plan", "Transfer", "Other"];
+const visaTypes = ["Tourist", "Visit", "Business", "Work", "Transit"];
+const cabins = ["Economy", "Premium economy", "Business", "First"];
+
+const emptyDetails = {
+  qty: "1",
+  transfers: "",
+  timeLimit: "",
+  hotelService: "Room",
+  from: "",
+  to: "",
+  airline: "",
+  flightNo: "",
+  pnr: "",
+  cabin: "Economy",
+  pickup: "",
+  dropoff: "",
+  vehicle: "",
+  country: "",
+  nationality: "",
+  visaType: "Tourist",
+};
 
 export function VoucherForm({
   customers,
@@ -44,6 +67,7 @@ export function VoucherForm({
     roomType: initial?.roomType || "",
     roomCategory: initial?.roomCategory || "",
     roomView: initial?.roomView || "",
+    details: { ...emptyDetails, ...initial?.details },
     supplierFc: initial?.supplierFc || 0,
     supplierCurrency: initial?.supplierCurrency || "KWD",
     supRoe: initial?.supRoe || 1,
@@ -76,6 +100,10 @@ export function VoucherForm({
     setForm((current) => ({ ...current, ...partial }));
   }
 
+  function detail(partial: Partial<typeof emptyDetails>) {
+    setForm((current) => ({ ...current, details: { ...current.details, ...partial } }));
+  }
+
   function setCurrency(which: "supplier" | "customer", code: string) {
     const found = currencies.find((item) => item.code === code);
     if (which === "supplier") patch({ supplierCurrency: code, supRoe: found?.rate || 1 });
@@ -85,7 +113,7 @@ export function VoucherForm({
   function submit(post: boolean) {
     setError("");
     start(async () => {
-      const result = await actionSaveVoucher({ ...form, id: initial?.id, post });
+      const result = await actionSaveVoucher({ ...form, details: relevantDetails(form.service, form.details), id: initial?.id, post });
       if (!result.ok) setError(result.error);
       else router.push(`/vouchers/${result.id}`);
     });
@@ -134,37 +162,14 @@ export function VoucherForm({
 
         <section className="rounded-2xl border border-line bg-paper p-5">
           <h2 className="font-display text-2xl">Service</h2>
+          <p className="mt-1 text-sm text-muted">{serviceHint(form.service)}</p>
           <div className="mt-4 grid gap-3 md:grid-cols-4">
-            <Field label="Check in">
-              <input
-                className={inputClass}
-                type="date"
-                value={form.checkIn}
-                onChange={(event) => {
-                  const checkIn = event.target.value;
-                  patch({ checkIn, nights: nightsBetween(checkIn, form.checkOut) });
-                }}
-              />
-            </Field>
-            <Field label="Check out">
-              <input
-                className={inputClass}
-                type="date"
-                value={form.checkOut}
-                onChange={(event) => {
-                  const checkOut = event.target.value;
-                  patch({ checkOut, nights: nightsBetween(form.checkIn, checkOut) });
-                }}
-              />
-            </Field>
-            <Field label="Nights"><input className={inputClass} type="number" min="1" value={form.nights} onChange={(event) => patch({ nights: Number(event.target.value) })} /></Field>
-            <Field label="Adults"><input className={inputClass} type="number" min="0" value={form.adults} onChange={(event) => patch({ adults: Number(event.target.value) })} /></Field>
-            <Field label="Children"><input className={inputClass} type="number" min="0" value={form.children} onChange={(event) => patch({ children: Number(event.target.value) })} /></Field>
-            <Field label="Infants"><input className={inputClass} type="number" min="0" value={form.infants} onChange={(event) => patch({ infants: Number(event.target.value) })} /></Field>
-            <Field label="Meal"><input className={inputClass} value={form.meal} onChange={(event) => patch({ meal: event.target.value })} /></Field>
-            <Field label="Room type"><input className={inputClass} value={form.roomType} onChange={(event) => patch({ roomType: event.target.value })} /></Field>
-            <Field label="Category"><input className={inputClass} value={form.roomCategory} onChange={(event) => patch({ roomCategory: event.target.value })} /></Field>
-            <Field label="View"><input className={inputClass} value={form.roomView} onChange={(event) => patch({ roomView: event.target.value })} /></Field>
+            {(form.service === "HOTEL" || form.service === "ACTIVITY") && (
+              <StayFields form={form} patch={patch} detail={detail} />
+            )}
+            {form.service === "FLIGHT" && <FlightFields form={form} patch={patch} detail={detail} />}
+            {form.service === "TRANSFER" && <TransferFields form={form} patch={patch} detail={detail} />}
+            {form.service === "VISA" && <VisaFields form={form} patch={patch} detail={detail} />}
           </div>
         </section>
 
@@ -183,16 +188,18 @@ export function VoucherForm({
             <Field label="Supplier ROE">
               <input className={inputClass} type="number" min="0" step="0.000001" value={form.supRoe} onChange={(event) => patch({ supRoe: Number(event.target.value) })} />
             </Field>
-            <Field label="Rate / night">
-              <input
-                className={inputClass}
-                type="number"
-                min="0"
-                step="0.001"
-                value={form.nights ? Number((Number(form.supplierFc) / Number(form.nights)).toFixed(3)) : 0}
-                onChange={(event) => patch({ supplierFc: Number(event.target.value) * Number(form.nights || 1) })}
-              />
-            </Field>
+            {(form.service === "HOTEL" || form.service === "ACTIVITY") && (
+              <Field label="Rate / night">
+                <input
+                  className={inputClass}
+                  type="number"
+                  min="0"
+                  step="0.001"
+                  value={form.nights ? Number((Number(form.supplierFc) / Number(form.nights)).toFixed(3)) : 0}
+                  onChange={(event) => patch({ supplierFc: Number(event.target.value) * Number(form.nights || 1) })}
+                />
+              </Field>
+            )}
             <Field label="Customer FC">
               <input className={inputClass} type="number" min="0" step="0.001" value={form.customerFc || ""} onChange={(event) => patch({ customerFc: Number(event.target.value) })} />
             </Field>
@@ -215,9 +222,11 @@ export function VoucherForm({
               Commission already received
             </label>
           </div>
-          <Field label="Remarks">
-            <textarea className={`${inputClass} mt-3 min-h-20`} value={form.remarks} onChange={(event) => patch({ remarks: event.target.value })} />
-          </Field>
+          {form.service !== "VISA" && (
+            <Field label="Remarks">
+              <textarea className={`${inputClass} mt-3 min-h-20`} value={form.remarks} onChange={(event) => patch({ remarks: event.target.value })} />
+            </Field>
+          )}
         </section>
         {error && <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-800">{error}</p>}
         <div className="flex flex-wrap gap-2">
@@ -258,6 +267,130 @@ export function VoucherForm({
         </p>
       </aside>
     </form>
+  );
+}
+
+type FormState = {
+  checkIn: string;
+  checkOut: string;
+  nights: number;
+  adults: number;
+  children: number;
+  infants: number;
+  meal: string;
+  roomType: string;
+  roomCategory: string;
+  roomView: string;
+  remarks: string;
+  details: typeof emptyDetails;
+};
+
+function relevantDetails(service: string, details: typeof emptyDetails) {
+  const keys =
+    service === "FLIGHT"
+      ? ["from", "to", "airline", "flightNo", "pnr", "cabin"]
+      : service === "TRANSFER"
+        ? ["pickup", "dropoff", "vehicle"]
+        : service === "VISA"
+          ? ["country", "nationality", "visaType"]
+          : ["qty", "transfers", "timeLimit", "hotelService"];
+  return Object.fromEntries(keys.map((key) => [key, details[key as keyof typeof details]]));
+}
+
+function serviceHint(service: string) {
+  if (service === "FLIGHT") return "Departure, route, and ticket details.";
+  if (service === "TRANSFER") return "Pickup and drop off replace check-in and check-out.";
+  if (service === "VISA") return "Country, nationality, and the visa type.";
+  if (service === "ACTIVITY") return "Same stay fields as a hotel voucher.";
+  return "Stay, room, and meal for the hotel file.";
+}
+
+function StayFields({ form, patch, detail }: { form: FormState; patch: (partial: Partial<FormState>) => void; detail: (partial: Partial<typeof emptyDetails>) => void }) {
+  return (
+    <>
+      <Field label="Check in">
+        <input className={inputClass} type="date" value={form.checkIn} onChange={(event) => patch({ checkIn: event.target.value, nights: nightsBetween(event.target.value, form.checkOut) })} />
+      </Field>
+      <Field label="Check out">
+        <input className={inputClass} type="date" value={form.checkOut} onChange={(event) => patch({ checkOut: event.target.value, nights: nightsBetween(form.checkIn, event.target.value) })} />
+      </Field>
+      <Field label="Nights"><input className={inputClass} type="number" min="1" value={form.nights} onChange={(event) => patch({ nights: Number(event.target.value) })} /></Field>
+      <Field label="Adults"><input className={inputClass} type="number" min="0" value={form.adults} onChange={(event) => patch({ adults: Number(event.target.value) })} /></Field>
+      <Field label="Children"><input className={inputClass} type="number" min="0" value={form.children} onChange={(event) => patch({ children: Number(event.target.value) })} /></Field>
+      <Field label="Infants"><input className={inputClass} type="number" min="0" value={form.infants} onChange={(event) => patch({ infants: Number(event.target.value) })} /></Field>
+      <Field label="Meal">
+        <select className={inputClass} value={form.meal} onChange={(event) => patch({ meal: event.target.value })}>
+          {meals.map((meal) => <option key={meal}>{meal}</option>)}
+        </select>
+      </Field>
+      <Field label="Qty"><input className={inputClass} type="number" min="1" value={form.details.qty} onChange={(event) => detail({ qty: event.target.value })} /></Field>
+      <Field label="Room type"><input className={inputClass} value={form.roomType} onChange={(event) => patch({ roomType: event.target.value })} /></Field>
+      <Field label="Room category"><input className={inputClass} value={form.roomCategory} onChange={(event) => patch({ roomCategory: event.target.value })} /></Field>
+      <Field label="Room view"><input className={inputClass} value={form.roomView} onChange={(event) => patch({ roomView: event.target.value })} /></Field>
+      <Field label="Transfers"><input className={inputClass} value={form.details.transfers} onChange={(event) => detail({ transfers: event.target.value })} placeholder="Arrival, departure" /></Field>
+      <Field label="Time limit"><input className={inputClass} type="date" value={form.details.timeLimit} onChange={(event) => detail({ timeLimit: event.target.value })} /></Field>
+      <Field label="Services">
+        <select className={inputClass} value={form.details.hotelService} onChange={(event) => detail({ hotelService: event.target.value })}>
+          {hotelServices.map((item) => <option key={item}>{item}</option>)}
+        </select>
+      </Field>
+    </>
+  );
+}
+
+function FlightFields({ form, patch, detail }: { form: FormState; patch: (partial: Partial<FormState>) => void; detail: (partial: Partial<typeof emptyDetails>) => void }) {
+  return (
+    <>
+      <Field label="Departure"><input className={inputClass} type="date" value={form.checkIn} onChange={(event) => patch({ checkIn: event.target.value })} /></Field>
+      <Field label="Return"><input className={inputClass} type="date" value={form.checkOut} onChange={(event) => patch({ checkOut: event.target.value })} /></Field>
+      <Field label="From"><input className={inputClass} value={form.details.from} onChange={(event) => detail({ from: event.target.value.toUpperCase() })} placeholder="KWI" /></Field>
+      <Field label="To"><input className={inputClass} value={form.details.to} onChange={(event) => detail({ to: event.target.value.toUpperCase() })} placeholder="DXB" /></Field>
+      <Field label="Airline"><input className={inputClass} value={form.details.airline} onChange={(event) => detail({ airline: event.target.value })} /></Field>
+      <Field label="Flight no"><input className={inputClass} value={form.details.flightNo} onChange={(event) => detail({ flightNo: event.target.value.toUpperCase() })} /></Field>
+      <Field label="Class">
+        <select className={inputClass} value={form.details.cabin} onChange={(event) => detail({ cabin: event.target.value })}>
+          {cabins.map((cabin) => <option key={cabin}>{cabin}</option>)}
+        </select>
+      </Field>
+      <Field label="PNR"><input className={inputClass} value={form.details.pnr} onChange={(event) => detail({ pnr: event.target.value.toUpperCase() })} /></Field>
+      <Field label="Adults"><input className={inputClass} type="number" min="0" value={form.adults} onChange={(event) => patch({ adults: Number(event.target.value) })} /></Field>
+      <Field label="Children"><input className={inputClass} type="number" min="0" value={form.children} onChange={(event) => patch({ children: Number(event.target.value) })} /></Field>
+      <Field label="Infants"><input className={inputClass} type="number" min="0" value={form.infants} onChange={(event) => patch({ infants: Number(event.target.value) })} /></Field>
+    </>
+  );
+}
+
+function TransferFields({ form, patch, detail }: { form: FormState; patch: (partial: Partial<FormState>) => void; detail: (partial: Partial<typeof emptyDetails>) => void }) {
+  return (
+    <>
+      <Field label="Pickup"><input className={inputClass} type="date" value={form.checkIn} onChange={(event) => patch({ checkIn: event.target.value })} /></Field>
+      <Field label="Drop off"><input className={inputClass} type="date" value={form.checkOut} onChange={(event) => patch({ checkOut: event.target.value })} /></Field>
+      <Field label="Pickup point"><input className={inputClass} value={form.details.pickup} onChange={(event) => detail({ pickup: event.target.value })} placeholder="Airport, hotel" /></Field>
+      <Field label="Drop off point"><input className={inputClass} value={form.details.dropoff} onChange={(event) => detail({ dropoff: event.target.value })} placeholder="Hotel, airport" /></Field>
+      <Field label="Vehicle"><input className={inputClass} value={form.details.vehicle} onChange={(event) => detail({ vehicle: event.target.value })} placeholder="Sedan, van" /></Field>
+      <Field label="Adults"><input className={inputClass} type="number" min="0" value={form.adults} onChange={(event) => patch({ adults: Number(event.target.value) })} /></Field>
+      <Field label="Children"><input className={inputClass} type="number" min="0" value={form.children} onChange={(event) => patch({ children: Number(event.target.value) })} /></Field>
+      <Field label="Infants"><input className={inputClass} type="number" min="0" value={form.infants} onChange={(event) => patch({ infants: Number(event.target.value) })} /></Field>
+    </>
+  );
+}
+
+function VisaFields({ form, patch, detail }: { form: FormState; patch: (partial: Partial<FormState>) => void; detail: (partial: Partial<typeof emptyDetails>) => void }) {
+  return (
+    <>
+      <Field label="Country"><input className={inputClass} value={form.details.country} onChange={(event) => detail({ country: event.target.value })} /></Field>
+      <Field label="Nationality"><input className={inputClass} value={form.details.nationality} onChange={(event) => detail({ nationality: event.target.value })} /></Field>
+      <Field label="Type of visa">
+        <select className={inputClass} value={form.details.visaType} onChange={(event) => detail({ visaType: event.target.value })}>
+          {visaTypes.map((type) => <option key={type}>{type}</option>)}
+        </select>
+      </Field>
+      <div className="md:col-span-4">
+        <Field label="Remark">
+          <textarea className={`${inputClass} min-h-20`} value={form.remarks} onChange={(event) => patch({ remarks: event.target.value })} />
+        </Field>
+      </div>
+    </>
   );
 }
 

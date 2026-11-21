@@ -1,6 +1,6 @@
 export const company = {
-  name: "Alomma Holidays Tourism and Travel",
-  short: "Alomma Holidays",
+  name: "Saafar",
+  short: "Saafar",
   city: "Kuwait",
   base: "KWD",
   product: "Safar Books",

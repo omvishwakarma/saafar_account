@@ -53,9 +53,45 @@ table.books tfoot td {
   border-bottom: none;
 }
 
+table.books.ledger {
+  width: 100%;
+  table-layout: fixed;
+  border: 1px solid #e5dccb;
+}
+
+table.books.ledger th,
+table.books.ledger td {
+  border: 1px solid #e5dccb;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+table.books.ledger thead th {
+  background: #f6f1e7;
+}
+
+table.books.ledger th.num,
+table.books.ledger td.num {
+  text-align: right;
+}
+
 input[type="number"]::-webkit-outer-spin-button,
 input[type="number"]::-webkit-inner-spin-button {
   margin: 0;
+}
+
+.report-logo {
+  display: none;
+}
+
+@media print {
+  .report-logo {
+    display: block;
+    height: 48px;
+    width: auto;
+    margin: 0 auto 16px;
+  }
 }
 
 @media print {

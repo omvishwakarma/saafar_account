@@ -8,7 +8,7 @@ export default async function NewVoucherPage() {
   const suppliers = data.partners.filter((partner) => partner.role === "vendor" || partner.role === "both");
   return (
     <div>
-      <PageHeader eyebrow="Travel file" title="New hotel voucher" sub="Enter the supplier cost and the customer sell. The slip on the right shows the margin in KWD before you post." />
+      <PageHeader eyebrow="Travel file" title="New voucher" sub="Pick the service first. Hotel and activity share the stay fields. Transfer uses pickup and drop off. Visa asks for country, nationality, and visa type." />
       <VoucherForm customers={customers} suppliers={suppliers} currencies={data.currencies} />
     </div>
   );

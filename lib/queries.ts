@@ -329,6 +329,7 @@ export async function getVoucher(id: string) {
     roomType: row.roomType || "",
     roomCategory: row.roomCategory || "",
     roomView: row.roomView || "",
+    details: (row.details || {}) as Record<string, string>,
     supplierFc: row.supplierFc,
     supplierCurrency: row.supplierCurrency,
     supRoe: row.supRoe,
@@ -776,23 +777,16 @@ export async function reportPartner(partnerId: string, asOf: string) {
   const accounts = await Account.find().lean();
   const accountOf = new Map(accounts.map((account) => [String(account._id), account]));
   const entries = await JournalEntry.find({ date: { $lte: endOf(asOf) } }).sort({ date: 1, createdAt: 1 }).lean();
-  const groups = new Map<string, { title: string; lines: { date: string; ref: string; account: string; label: string; debit: number; credit: number; balance: number }[] }>();
+  const groups = new Map<string, { title: string; lines: { date: string; ref: string; account: string; label: string; usd: number; debit: number; credit: number; balance: number }[] }>();
   const running = new Map<string, number>();
   for (const entry of entries) {
     for (const line of entry.lines) {
       if (sid(line.partnerId) !== String(partner._id)) continue;
       const account = accountOf.get(sid(line.accountId));
       if (!account) continue;
-      const title =
-        account.subtype === "receivable"
-          ? "Receivable"
-          : account.subtype === "payable"
-            ? "Payable"
-            : account.type === "income"
-              ? "Income"
-              : account.type === "expense"
-                ? "Expense"
-                : account.name;
+      if (account.type === "income" || account.type === "expense") continue;
+      if (account.subtype === "bank" || account.subtype === "cash") continue;
+      const title = account.subtype === "receivable" ? "Receivable" : account.subtype === "payable" ? "Payable" : account.name;
       const key = title;
       const prev = running.get(key) || 0;
       const next = round(prev + line.debit - line.credit, 3);
@@ -803,6 +797,7 @@ export async function reportPartner(partnerId: string, asOf: string) {
         ref: entry.ref,
         account: `${account.code} · ${account.name}`,
         label: line.label || entry.memo || "",
+        usd: line.currency === "USD" ? line.amountCurrency || 0 : 0,
         debit: line.debit,
         credit: line.credit,
         balance: next,

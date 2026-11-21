@@ -419,6 +419,15 @@ export async function deletePayment(id: string) {
   await payment.deleteOne();
 }
 
+function cleanDetails(details: VoucherInput["details"]) {
+  const cleaned: Record<string, string> = {};
+  for (const [key, value] of Object.entries(details || {})) {
+    const text = String(value ?? "").trim();
+    if (text) cleaned[key] = text;
+  }
+  return cleaned;
+}
+
 export async function saveVoucher(input: VoucherInput) {
   await db();
   if (!input.customerId || !input.supplierId) throw new Error("Choose a customer and a supplier");
@@ -454,6 +463,7 @@ export async function saveVoucher(input: VoucherInput) {
     roomType: input.roomType || "",
     roomCategory: input.roomCategory || "",
     roomView: input.roomView || "",
+    details: cleanDetails(input.details),
     supplierFc,
     supplierCurrency: input.supplierCurrency,
     supRoe,

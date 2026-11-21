@@ -40,6 +40,7 @@ export default async function VoucherPage({ params }: { params: Promise<{ id: st
             roomType: voucher.roomType,
             roomCategory: voucher.roomCategory,
             roomView: voucher.roomView,
+            details: voucher.details,
             supplierFc: voucher.supplierFc,
             supplierCurrency: voucher.supplierCurrency,
             supRoe: voucher.supRoe,
@@ -72,11 +73,7 @@ export default async function VoucherPage({ params }: { params: Promise<{ id: st
         </div>
         <dl className="mt-6 grid grid-cols-2 gap-3 text-sm sm:grid-cols-4">
           <Mini label="Date" value={<When value={voucher.date} />} />
-          <Mini label="Stay" value={`${voucher.checkIn || "—"} → ${voucher.checkOut || "—"}`} />
-          <Mini label="Nights" value={String(voucher.nights)} />
-          <Mini label="Guests" value={`${voucher.adults} adl · ${voucher.children} chd · ${voucher.infants} inf`} />
-          <Mini label="Room" value={[voucher.roomType, voucher.roomCategory, voucher.roomView].filter(Boolean).join(" · ") || "—"} />
-          <Mini label="Meal" value={voucher.meal || "—"} />
+          {serviceFacts(voucher).map((fact) => <Mini key={fact.label} label={fact.label} value={fact.value} />)}
         </dl>
         <div className="mt-6 grid gap-3 sm:grid-cols-2">
           <div className="rounded-xl bg-sand p-4">
@@ -103,6 +100,58 @@ export default async function VoucherPage({ params }: { params: Promise<{ id: st
       </Panel>
     </div>
   );
+}
+
+function serviceFacts(voucher: {
+  service: string;
+  checkIn: string;
+  checkOut: string;
+  nights: number;
+  adults: number;
+  children: number;
+  infants: number;
+  meal: string;
+  roomType: string;
+  roomCategory: string;
+  roomView: string;
+  details: Record<string, string>;
+}) {
+  const guests = `${voucher.adults} adl · ${voucher.children} chd · ${voucher.infants} inf`;
+  const details = voucher.details || {};
+  if (voucher.service === "FLIGHT") {
+    return [
+      { label: "Route", value: `${details.from || "—"} → ${details.to || "—"}` },
+      { label: "Departure", value: voucher.checkIn || "—" },
+      { label: "Return", value: voucher.checkOut || "—" },
+      { label: "Flight", value: [details.airline, details.flightNo].filter(Boolean).join(" ") || "—" },
+      { label: "Class", value: details.cabin || "—" },
+      { label: "PNR", value: details.pnr || "—" },
+      { label: "Guests", value: guests },
+    ];
+  }
+  if (voucher.service === "TRANSFER") {
+    return [
+      { label: "Pickup", value: `${voucher.checkIn || "—"} · ${details.pickup || "—"}` },
+      { label: "Drop off", value: `${voucher.checkOut || "—"} · ${details.dropoff || "—"}` },
+      { label: "Vehicle", value: details.vehicle || "—" },
+      { label: "Guests", value: guests },
+    ];
+  }
+  if (voucher.service === "VISA") {
+    return [
+      { label: "Country", value: details.country || "—" },
+      { label: "Nationality", value: details.nationality || "—" },
+      { label: "Visa", value: details.visaType || "—" },
+    ];
+  }
+  return [
+    { label: "Stay", value: `${voucher.checkIn || "—"} → ${voucher.checkOut || "—"}` },
+    { label: "Nights", value: String(voucher.nights) },
+    { label: "Guests", value: guests },
+    { label: "Room", value: [voucher.roomType, voucher.roomCategory, voucher.roomView].filter(Boolean).join(" · ") || "—" },
+    { label: "Meal", value: voucher.meal || "—" },
+    { label: "Service", value: details.hotelService || "—" },
+  ];
 }
 
 function Block({ title, name, lines }: { title: string; name: string; lines: string[] }) {
