@@ -1,8 +1,9 @@
 import { company } from "@/lib/company";
+import type { SessionUser } from "@/lib/session";
 import { SideNav } from "./SideNav";
 import { SignOut } from "./SignOut";
 
-export function Shell({ children }: { children: React.ReactNode }) {
+export function Shell({ user, children }: { user: SessionUser; children: React.ReactNode }) {
   return (
     <div className="min-h-screen md:flex">
       <aside className="sticky top-0 hidden h-screen w-[248px] shrink-0 flex-col bg-pine text-sand md:flex">
@@ -10,10 +11,10 @@ export function Shell({ children }: { children: React.ReactNode }) {
           <div className="font-display text-[1.7rem] leading-none tracking-tight">Safar Books</div>
           <div className="mt-1 text-xs text-sand/60">Travel accounting</div>
         </div>
-        <SideNav />
+        <SideNav admin={user.role === "admin"} />
         <div className="border-t border-white/10 px-5 py-4 text-xs text-sand/55">
-          <div className="font-medium text-sand/80">{company.short}</div>
-          <div>{company.city} · books in {company.base}</div>
+          <div className="font-medium text-sand/80">{user.name}</div>
+          <div>{user.role === "admin" ? "Admin" : "Consultant"} · {user.username}</div>
         </div>
       </aside>
       <div className="min-w-0 flex-1">
@@ -25,11 +26,12 @@ export function Shell({ children }: { children: React.ReactNode }) {
               <SignOut light />
             </div>
           </div>
-          <SideNav compact />
+          <SideNav compact admin={user.role === "admin"} />
         </div>
         <header className="no-print sticky top-0 z-20 hidden h-14 items-center justify-between border-b border-line/80 bg-sand/85 px-6 backdrop-blur md:flex">
           <div className="text-sm text-muted">{company.name}</div>
           <div className="flex items-center gap-4">
+            <div className="text-sm text-ink">{user.name}</div>
             <div className="rounded-full border border-line bg-paper px-3 py-1 text-xs font-semibold uppercase tracking-[0.14em]">Base {company.base}</div>
             <SignOut />
           </div>

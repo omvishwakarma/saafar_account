@@ -20,6 +20,10 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(url);
   }
 
+  if (pathname.startsWith("/admin") && signedIn.role !== "admin") {
+    return NextResponse.redirect(new URL("/", request.url));
+  }
+
   return NextResponse.next({ request: { headers } });
 }
 

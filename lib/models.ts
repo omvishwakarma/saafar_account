@@ -220,6 +220,26 @@ const MetaSchema = new Schema({
   value: String,
 });
 
+const UserSchema = new Schema(
+  {
+    username: { type: String, required: true, unique: true },
+    name: { type: String, required: true },
+    role: { type: String, enum: ["admin", "consultant"], required: true },
+    passwordHash: { type: String, required: true },
+    active: { type: Boolean, default: true },
+  },
+  { timestamps: true },
+);
+
+const AuditSchema = new Schema({
+  at: { type: Date, required: true, index: true },
+  username: { type: String, required: true },
+  name: { type: String, default: "" },
+  action: { type: String, required: true },
+  summary: { type: String, required: true },
+  target: { type: String, default: "" },
+});
+
 export type MoveDoc = InferSchemaType<typeof MoveSchema> & { _id: mongoose.Types.ObjectId };
 
 function model<T>(name: string, schema: Schema) {
@@ -239,6 +259,8 @@ export const Voucher = model("Voucher", VoucherSchema);
 export const Receipt = model("Receipt", ReceiptSchema);
 export const Counter = model("Counter", CounterSchema);
 export const Meta = model("Meta", MetaSchema);
+export const User = model("User", UserSchema);
+export const AuditLog = model("AuditLog", AuditSchema);
 
 export async function nextNumber(prefix: string) {
   const year = new Date().getFullYear();

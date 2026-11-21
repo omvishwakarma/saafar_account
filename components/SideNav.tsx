@@ -64,7 +64,7 @@ function active(pathname: string, search: URLSearchParams, href: string) {
   return pathname === path || pathname.startsWith(`${path}/`);
 }
 
-export async function SideNav({ compact = false }: { compact?: boolean }) {
+export async function SideNav({ compact = false, admin = false }: { compact?: boolean; admin?: boolean }) {
   const current = (await headers()).get("x-pathname") || "/";
   const [pathname, query = ""] = current.split("?");
   const search = new URLSearchParams(query);
@@ -77,6 +77,11 @@ export async function SideNav({ compact = false }: { compact?: boolean }) {
             {label}
           </Link>
         ))}
+        {admin && (
+          <Link href="/admin" className={`shrink-0 rounded-full px-3 py-1 text-sm ${active(pathname, search, "/admin") ? "bg-brass text-white" : "bg-white text-ink"}`}>
+            Admin
+          </Link>
+        )}
       </div>
     );
   }
@@ -100,6 +105,14 @@ export async function SideNav({ compact = false }: { compact?: boolean }) {
           </div>
         </div>
       ))}
+      {admin && (
+        <div>
+          <div className="px-3 text-[10px] font-semibold uppercase tracking-[0.18em] text-sand/40">Admin</div>
+          <Link href="/admin" className={`mt-1 block rounded-lg px-3 py-1.5 text-sm ${active(pathname, search, "/admin") ? "bg-brass text-white" : "text-sand/85 hover:bg-white/5"}`}>
+            Users and log
+          </Link>
+        </div>
+      )}
     </nav>
   );
 }

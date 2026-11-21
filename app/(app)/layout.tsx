@@ -5,6 +5,7 @@ import { sessionCookie, verifySession } from "@/lib/session";
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const jar = await cookies();
-  if (!(await verifySession(jar.get(sessionCookie.name)?.value))) redirect("/login");
-  return <Shell>{children}</Shell>;
+  const user = await verifySession(jar.get(sessionCookie.name)?.value);
+  if (!user) redirect("/login");
+  return <Shell user={user}>{children}</Shell>;
 }

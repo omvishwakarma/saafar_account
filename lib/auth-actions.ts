@@ -2,16 +2,22 @@
 
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
-import { authConfigured, createSession, credentialsMatch, safeNext, sessionCookie } from "./session";
+import { recordAudit } from "./audit";
+import { authConfigured, createSession, safeNext, sessionCookie } from "./session";
+import { authenticate } from "./users";
 
 export async function login(input: { username: string; password: string; next?: string }) {
   if (!authConfigured()) {
     return { error: "Login is not configured yet. Add AUTH_USERNAME, AUTH_PASSWORD, and AUTH_SECRET." };
   }
-  if (!credentialsMatch(input.username.trim(), input.password)) {
-    return { error: "That username or password is wrong." };
-  }
-  const token = await createSession(input.username.trim());
+  const user = await authenticate(input.username, input.password);
+  if (!user) return { error: "That username or password is wrong." };
+  const token = await createSession({
+    username: user.username,
+    id: String(user._id),
+    role: user.role,
+    name: user.name,
+  });
   const jar = await cookies();
   jar.set(sessionCookie.name, token, {
     httpOnly: true,
@@ -20,6 +26,7 @@ export async function login(input: { username: string; password: string; next?: 
     path: "/",
     maxAge: sessionCookie.maxAge,
   });
+  await recordAudit({ username: user.username, name: user.name, summary: "Signed in" });
   redirect(safeNext(input.next));
 }
 

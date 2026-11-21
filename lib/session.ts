@@ -49,30 +49,59 @@ function sameText(left: string, right: string) {
   return diff === 0;
 }
 
-export function credentialsMatch(username: string, password: string) {
+export type SessionUser = {
+  username: string;
+  id: string;
+  role: "admin" | "consultant";
+  name: string;
+};
+
+export function isEnvOwner(username: string, password: string) {
   if (!authConfigured()) return false;
-  return sameText(username, process.env.AUTH_USERNAME || "") && sameText(password, process.env.AUTH_PASSWORD || "");
+  const owner = (process.env.AUTH_USERNAME || "").trim().toLowerCase();
+  if (username.trim().toLowerCase() !== owner) return false;
+  return sameText(password, process.env.AUTH_PASSWORD || "");
 }
 
-export async function createSession(username: string) {
+export async function createSession(user: SessionUser) {
   const payload = bytesToBase64Url(
-    new TextEncoder().encode(JSON.stringify({ u: username, exp: Date.now() + MAX_AGE * 1000 })),
+    new TextEncoder().encode(
+      JSON.stringify({
+        u: user.username,
+        id: user.id,
+        role: user.role,
+        name: user.name,
+        exp: Date.now() + MAX_AGE * 1000,
+      }),
+    ),
   );
   return `${payload}.${await hmac(payload)}`;
 }
 
-export async function verifySession(token: string | undefined) {
-  if (!token || !authSecret()) return false;
+export async function verifySession(token: string | undefined): Promise<SessionUser | null> {
+  if (!token || !authSecret()) return null;
   const [payload, signature] = token.split(".");
-  if (!payload || !signature || token.split(".").length !== 2) return false;
+  if (!payload || !signature || token.split(".").length !== 2) return null;
   const expected = await hmac(payload);
-  if (!sameText(expected, signature)) return false;
+  if (!sameText(expected, signature)) return null;
   try {
-    const data = JSON.parse(new TextDecoder().decode(base64UrlToBytes(payload))) as { u?: string; exp?: number };
-    if (!data.exp || data.exp < Date.now()) return false;
-    return data.u === process.env.AUTH_USERNAME;
+    const data = JSON.parse(new TextDecoder().decode(base64UrlToBytes(payload))) as {
+      u?: string;
+      id?: string;
+      role?: string;
+      name?: string;
+      exp?: number;
+    };
+    if (!data.u || !data.exp || data.exp < Date.now()) return null;
+    if (data.role === "admin" || data.role === "consultant") {
+      return { username: data.u, id: data.id || "", role: data.role, name: data.name || data.u };
+    }
+    if (data.u === process.env.AUTH_USERNAME) {
+      return { username: data.u, id: "", role: "admin", name: data.u };
+    }
+    return null;
   } catch {
-    return false;
+    return null;
   }
 }
 
