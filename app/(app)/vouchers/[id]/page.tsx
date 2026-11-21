@@ -137,6 +137,15 @@ function serviceFacts(voucher: {
       { label: "Guests", value: guests },
     ];
   }
+  if (voucher.service === "ACTIVITY") {
+    return [
+      { label: "Activity date", value: voucher.checkIn || "—" },
+      { label: "Name", value: details.activityName || "—" },
+      { label: "Guests", value: guests },
+      { label: "Meal", value: voucher.meal || "—" },
+      { label: "Qty", value: details.qty || "—" },
+    ];
+  }
   if (voucher.service === "VISA") {
     return [
       { label: "Country", value: details.country || "—" },

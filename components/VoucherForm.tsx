@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { actionDeleteVoucher, actionSaveVoucher } from "@/lib/actions";
 import { formatMoney, nightsBetween, todayISO, voucherFigures } from "@/lib/money";
 import type { CurrencyRow, PartnerRow, VoucherInput } from "@/lib/types";
+import { AirlineSelect } from "./AirlineSelect";
 import { Button, Field, inputClass } from "./ui";
 
 const services = ["HOTEL", "FLIGHT", "TRANSFER", "VISA", "ACTIVITY"];
@@ -31,6 +32,7 @@ const emptyDetails = {
   country: "",
   nationality: "",
   visaType: "Tourist",
+  activityName: "",
 };
 
 export function VoucherForm({
@@ -164,9 +166,8 @@ export function VoucherForm({
           <h2 className="font-display text-2xl">Service</h2>
           <p className="mt-1 text-sm text-muted">{serviceHint(form.service)}</p>
           <div className="mt-4 grid gap-3 md:grid-cols-4">
-            {(form.service === "HOTEL" || form.service === "ACTIVITY") && (
-              <StayFields form={form} patch={patch} detail={detail} />
-            )}
+            {form.service === "HOTEL" && <StayFields form={form} patch={patch} detail={detail} />}
+            {form.service === "ACTIVITY" && <ActivityFields form={form} patch={patch} detail={detail} />}
             {form.service === "FLIGHT" && <FlightFields form={form} patch={patch} detail={detail} />}
             {form.service === "TRANSFER" && <TransferFields form={form} patch={patch} detail={detail} />}
             {form.service === "VISA" && <VisaFields form={form} patch={patch} detail={detail} />}
@@ -188,7 +189,7 @@ export function VoucherForm({
             <Field label="Supplier ROE">
               <input className={inputClass} type="number" min="0" step="0.000001" value={form.supRoe} onChange={(event) => patch({ supRoe: Number(event.target.value) })} />
             </Field>
-            {(form.service === "HOTEL" || form.service === "ACTIVITY") && (
+            {form.service === "HOTEL" && (
               <Field label="Rate / night">
                 <input
                   className={inputClass}
@@ -222,7 +223,7 @@ export function VoucherForm({
               Commission already received
             </label>
           </div>
-          {form.service !== "VISA" && (
+          {form.service !== "VISA" && form.service !== "ACTIVITY" && (
             <Field label="Remarks">
               <textarea className={`${inputClass} mt-3 min-h-20`} value={form.remarks} onChange={(event) => patch({ remarks: event.target.value })} />
             </Field>
@@ -293,7 +294,9 @@ function relevantDetails(service: string, details: typeof emptyDetails) {
         ? ["pickup", "dropoff", "vehicle"]
         : service === "VISA"
           ? ["country", "nationality", "visaType"]
-          : ["qty", "transfers", "timeLimit", "hotelService"];
+          : service === "ACTIVITY"
+            ? ["activityName", "qty"]
+            : ["qty", "transfers", "timeLimit", "hotelService"];
   return Object.fromEntries(keys.map((key) => [key, details[key as keyof typeof details]]));
 }
 
@@ -301,7 +304,7 @@ function serviceHint(service: string) {
   if (service === "FLIGHT") return "Departure, route, and ticket details.";
   if (service === "TRANSFER") return "Pickup and drop off replace check-in and check-out.";
   if (service === "VISA") return "Country, nationality, and the visa type.";
-  if (service === "ACTIVITY") return "Same stay fields as a hotel voucher.";
+  if (service === "ACTIVITY") return "Date, name, guests, meal, and quantity.";
   return "Stay, room, and meal for the hotel file.";
 }
 
@@ -338,6 +341,29 @@ function StayFields({ form, patch, detail }: { form: FormState; patch: (partial:
   );
 }
 
+function ActivityFields({ form, patch, detail }: { form: FormState; patch: (partial: Partial<FormState>) => void; detail: (partial: Partial<typeof emptyDetails>) => void }) {
+  return (
+    <>
+      <Field label="Date"><input className={inputClass} type="date" value={form.checkIn} onChange={(event) => patch({ checkIn: event.target.value })} /></Field>
+      <Field label="Name"><input className={inputClass} value={form.details.activityName} onChange={(event) => detail({ activityName: event.target.value })} placeholder="Activity name" /></Field>
+      <Field label="Adults"><input className={inputClass} type="number" min="0" value={form.adults} onChange={(event) => patch({ adults: Number(event.target.value) })} /></Field>
+      <Field label="Children"><input className={inputClass} type="number" min="0" value={form.children} onChange={(event) => patch({ children: Number(event.target.value) })} /></Field>
+      <Field label="Infants"><input className={inputClass} type="number" min="0" value={form.infants} onChange={(event) => patch({ infants: Number(event.target.value) })} /></Field>
+      <Field label="Meal">
+        <select className={inputClass} value={form.meal} onChange={(event) => patch({ meal: event.target.value })}>
+          {meals.map((meal) => <option key={meal}>{meal}</option>)}
+        </select>
+      </Field>
+      <Field label="Qty"><input className={inputClass} type="number" min="1" value={form.details.qty} onChange={(event) => detail({ qty: event.target.value })} /></Field>
+      <div className="md:col-span-4">
+        <Field label="Remark">
+          <textarea className={`${inputClass} min-h-20`} value={form.remarks} onChange={(event) => patch({ remarks: event.target.value })} />
+        </Field>
+      </div>
+    </>
+  );
+}
+
 function FlightFields({ form, patch, detail }: { form: FormState; patch: (partial: Partial<FormState>) => void; detail: (partial: Partial<typeof emptyDetails>) => void }) {
   return (
     <>
@@ -345,7 +371,7 @@ function FlightFields({ form, patch, detail }: { form: FormState; patch: (partia
       <Field label="Return"><input className={inputClass} type="date" value={form.checkOut} onChange={(event) => patch({ checkOut: event.target.value })} /></Field>
       <Field label="From"><input className={inputClass} value={form.details.from} onChange={(event) => detail({ from: event.target.value.toUpperCase() })} placeholder="KWI" /></Field>
       <Field label="To"><input className={inputClass} value={form.details.to} onChange={(event) => detail({ to: event.target.value.toUpperCase() })} placeholder="DXB" /></Field>
-      <Field label="Airline"><input className={inputClass} value={form.details.airline} onChange={(event) => detail({ airline: event.target.value })} /></Field>
+      <Field label="Airline"><AirlineSelect value={form.details.airline} onChange={(airline) => detail({ airline })} /></Field>
       <Field label="Flight no"><input className={inputClass} value={form.details.flightNo} onChange={(event) => detail({ flightNo: event.target.value.toUpperCase() })} /></Field>
       <Field label="Class">
         <select className={inputClass} value={form.details.cabin} onChange={(event) => detail({ cabin: event.target.value })}>
