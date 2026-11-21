@@ -1,5 +1,6 @@
 import { company } from "@/lib/company";
 import { SideNav } from "./SideNav";
+import { SignOut } from "./SignOut";
 
 export function Shell({ children }: { children: React.ReactNode }) {
   return (
@@ -19,13 +20,19 @@ export function Shell({ children }: { children: React.ReactNode }) {
         <div className="border-b border-line bg-pine text-sand md:hidden">
           <div className="flex items-center justify-between px-4 py-3">
             <div className="font-display text-2xl leading-none">Safar Books</div>
-            <div className="text-xs uppercase tracking-[0.14em] text-sand/70">{company.base}</div>
+            <div className="flex items-center gap-3">
+              <div className="text-xs uppercase tracking-[0.14em] text-sand/70">{company.base}</div>
+              <SignOut light />
+            </div>
           </div>
           <SideNav compact />
         </div>
         <header className="no-print sticky top-0 z-20 hidden h-14 items-center justify-between border-b border-line/80 bg-sand/85 px-6 backdrop-blur md:flex">
           <div className="text-sm text-muted">{company.name}</div>
-          <div className="rounded-full border border-line bg-paper px-3 py-1 text-xs font-semibold uppercase tracking-[0.14em]">Base {company.base}</div>
+          <div className="flex items-center gap-4">
+            <div className="rounded-full border border-line bg-paper px-3 py-1 text-xs font-semibold uppercase tracking-[0.14em]">Base {company.base}</div>
+            <SignOut />
+          </div>
         </header>
         <main className="px-4 py-5 md:px-8 md:py-7">{children}</main>
       </div>
