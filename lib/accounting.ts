@@ -12,6 +12,7 @@ import {
   nextNumber,
 } from "./models";
 import { settle } from "./payment-math";
+import { voucherFileLabel } from "./voucher-detail";
 import type { MoveInput, MoveType, PaymentInput, ReceiptInput, VoucherInput } from "./types";
 
 type JLine = {
@@ -592,8 +593,7 @@ export async function confirmVoucher(id: string) {
   const cost = await accountByCode(voucher.service === "FLIGHT" ? "51000" : "50000");
   const date = voucher.date.toISOString().slice(0, 10);
   const due = addDays(date, 7);
-  const pax = voucher.paxName ? ` · ${voucher.paxName}` : "";
-  const label = `${voucher.service} ${voucher.city}${pax}`.trim();
+  const label = voucherFileLabel(voucher);
 
   const invoiceLines: { label: string; accountId: string; qty: number; price: number; taxRate: number }[] = [];
   if (voucher.customerFc > 0) {
@@ -766,20 +766,116 @@ export async function postReceipt(id: string) {
   await receipt.save();
 }
 
+async function releaseReceiptAllocations(receipt: {
+  allocations?: { moveId: unknown; amount: number; amountLc: number }[];
+}) {
+  for (const alloc of receipt.allocations || []) {
+    const move = await Move.findById(alloc.moveId);
+    if (!move || move.status === "draft") continue;
+    const dp = decimals(move.currency);
+    const dust = 10 ** -dp / 2;
+    move.residual = round(Math.min(move.amountTotal, (move.residual || 0) + alloc.amount), dp);
+    move.residualLc = round(Math.min(move.amountTotalLc, (move.residualLc || 0) + (alloc.amountLc || 0)), 3);
+    if (move.residual <= dust) {
+      move.residual = 0;
+      move.residualLc = 0;
+      move.status = "paid";
+    } else if (move.amountTotal - move.residual <= dust) {
+      move.status = "posted";
+    } else {
+      move.status = "partial";
+    }
+    await move.save();
+  }
+}
+
+export async function allocateReceipt(id: string, rows: { moveId: string; amount: number }[]) {
+  await db();
+  const receipt = await Receipt.findById(id);
+  if (!receipt) throw new Error("Voucher not found");
+  if (receipt.status !== "posted") throw new Error("Post the voucher before allocating it");
+  const accounts = await Account.find().lean();
+  const accountOf = new Map(accounts.map((account) => [String(account._id), account]));
+  let advanceLc = 0;
+  let partnerId = "";
+  let wanted: "in_invoice" | "out_invoice" | "" = "";
+  for (const line of receipt.lines) {
+    const account = accountOf.get(String(line.accountId));
+    if (!account || !line.partnerId) continue;
+    if ((account.subtype === "payable" || account.subtype === "prepayment") && line.debit > 0) {
+      advanceLc = round(advanceLc + line.debit, 3);
+      partnerId = String(line.partnerId);
+      wanted = "in_invoice";
+    }
+    if ((account.subtype === "receivable" || account.code === "21000") && line.credit > 0) {
+      advanceLc = round(advanceLc + line.credit, 3);
+      partnerId = String(line.partnerId);
+      wanted = "out_invoice";
+    }
+  }
+  if (!wanted || !(advanceLc > 0)) throw new Error("This voucher has no advance to allocate");
+  const used = round((receipt.allocations || []).reduce((sum, row) => sum + (row.amountLc || 0), 0), 3);
+  const room = round(advanceLc - used, 3);
+  const fresh = rows
+    .map((row) => ({ moveId: String(row.moveId), amount: num(row.amount, "Amount") }))
+    .filter((row) => row.amount > 0);
+  if (!fresh.length) throw new Error("Enter an amount to allocate");
+  const moves = await Move.find({ _id: { $in: fresh.map((row) => row.moveId) } });
+  let addLc = 0;
+  const stored: { move: (typeof moves)[number]; amount: number; amountLc: number }[] = [];
+  for (const row of fresh) {
+    const move = moves.find((item) => String(item._id) === row.moveId);
+    if (!move) throw new Error("A selected document no longer exists");
+    if (String(move.partnerId) !== partnerId) throw new Error("Every document must belong to the same partner");
+    if (move.moveType !== wanted) throw new Error(`${move.number} cannot take this advance`);
+    if (move.status !== "posted" && move.status !== "partial") throw new Error(`${move.number} is not open`);
+    const dust = 10 ** -decimals(move.currency) / 2;
+    if (row.amount > move.residual + dust) throw new Error(`${move.number} only has ${move.residual} open`);
+    const amountLc = toBase(row.amount, move.rate);
+    addLc = round(addLc + amountLc, 3);
+    stored.push({ move, amount: row.amount, amountLc });
+  }
+  if (addLc > room + 0.0005) throw new Error("That is more than the advance still open");
+  for (const row of stored) {
+    const dp = decimals(row.move.currency);
+    const full = row.amount >= row.move.residual - 10 ** -dp / 2;
+    row.move.residual = full ? 0 : round(row.move.residual - row.amount, dp);
+    row.move.residualLc = full ? 0 : round(row.move.residualLc - row.amountLc, 3);
+    row.move.status = row.move.residualLc <= 0.0005 ? "paid" : "partial";
+    if (row.move.status === "paid") {
+      row.move.residual = 0;
+      row.move.residualLc = 0;
+    }
+    await row.move.save();
+  }
+  receipt.allocations = [
+    ...(receipt.allocations || []),
+    ...stored.map((row) => ({ moveId: row.move._id, amount: row.amount, amountLc: row.amountLc })),
+  ];
+  await receipt.save();
+}
+
 export async function reopenReceipt(id: string) {
   await db();
   const receipt = await Receipt.findById(id);
   if (!receipt) throw new Error("Voucher not found");
   if (receipt.status === "draft") return;
+  await releaseReceiptAllocations(receipt);
   await JournalEntry.deleteMany({ source: "receipt", sourceId: receipt._id });
-  await Receipt.updateOne({ _id: receipt._id }, { $set: { status: "draft" }, $unset: { journalEntryId: 1 } });
+  await Receipt.updateOne(
+    { _id: receipt._id },
+    { $set: { status: "draft", allocations: [] }, $unset: { journalEntryId: 1 } },
+  );
 }
 
 export async function deleteReceipt(id: string) {
   await db();
   const receipt = await Receipt.findById(id);
   if (!receipt) throw new Error("Voucher not found");
-  if (receipt.status !== "draft") await JournalEntry.deleteMany({ source: "receipt", sourceId: receipt._id });
+  if (receipt.status !== "draft") {
+    await releaseReceiptAllocations(receipt);
+    await JournalEntry.deleteMany({ source: "receipt", sourceId: receipt._id });
+  }
   await receipt.deleteOne();
 }
 

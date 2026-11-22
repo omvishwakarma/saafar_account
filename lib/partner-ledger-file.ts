@@ -24,7 +24,7 @@ export type PartnerLedgerFile = {
 };
 
 function logoBuffer() {
-  return fs.readFileSync(path.join(process.cwd(), "public", "saafar-logo.png"));
+  return fs.readFileSync(path.join(process.cwd(), "public", "alomma-logo.png"));
 }
 
 function subtitle(asOf: string) {
@@ -51,17 +51,17 @@ function pdfRow(line: Line, showUsd: boolean) {
 export function buildPartnerLedgerPdf(report: PartnerLedgerFile) {
   const doc = new jsPDF({ orientation: "landscape", unit: "pt", format: "a4" });
   const logo = logoBuffer();
-  doc.addImage(`data:image/png;base64,${logo.toString("base64")}`, "PNG", 36, 28, 154, 50);
+  doc.addImage(`data:image/png;base64,${logo.toString("base64")}`, "PNG", 36, 22, 150, 87);
   doc.setFont("times", "bold");
   doc.setFontSize(18);
   doc.setTextColor(28, 25, 21);
-  doc.text(report.partnerName, 36, 104);
+  doc.text(report.partnerName, 36, 132);
   doc.setFont("helvetica", "normal");
   doc.setFontSize(10);
   doc.setTextColor(109, 101, 91);
-  doc.text(subtitle(report.asOf), 36, 120);
+  doc.text(subtitle(report.asOf), 36, 150);
 
-  let y = 140;
+  let y = 174;
   if (report.sections.length === 0) {
     doc.text("No posted lines for this partner yet.", 36, y);
   }
@@ -96,14 +96,11 @@ export async function buildPartnerLedgerXlsx(report: PartnerLedgerFile) {
   const workbook = new ExcelJS.Workbook();
   workbook.creator = company.product;
   const sheet = workbook.addWorksheet("Partner ledger", { views: [{ showGridLines: false }] });
-  const imageId = workbook.addImage({
-    buffer: logoBuffer(),
-    extension: "png",
-  });
-  sheet.addImage(imageId, { tl: { col: 0, row: 0 }, ext: { width: 154, height: 50 } });
+  const imageId = workbook.addImage({ buffer: logoBuffer(), extension: "png" });
+  sheet.addImage(imageId, { tl: { col: 0, row: 0 }, ext: { width: 150, height: 87 } });
   sheet.getRow(1).height = 24;
-  sheet.getRow(2).height = 20;
-  sheet.getRow(3).height = 16;
+  sheet.getRow(2).height = 22;
+  sheet.getRow(3).height = 18;
 
   sheet.mergeCells("A5:G5");
   const title = sheet.getCell("A5");

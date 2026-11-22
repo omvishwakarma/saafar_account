@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { AdminDesk } from "@/components/AdminDesk";
 import { PageHeader } from "@/components/ui";
 import { listAudit } from "@/lib/audit";
+import { company } from "@/lib/company";
 import { currentUser } from "@/lib/current-user";
 import { listUsers } from "@/lib/users";
 
@@ -12,7 +13,7 @@ export default async function AdminPage() {
   return (
     <div>
       <PageHeader
-        eyebrow="Saafar admin"
+        eyebrow={company.name}
         title="Users and log"
         sub="Create a username and password for each consultant. The log records who signed in and what they changed in the books."
       />

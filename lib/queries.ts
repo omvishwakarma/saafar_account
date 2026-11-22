@@ -1,6 +1,7 @@
 import mongoose from "mongoose";
 import { company } from "./company";
 import { formatDate, isoDate, round, todayISO } from "./money";
+import { voucherServiceDetail } from "./voucher-detail";
 import {
   Account,
   Currency,
@@ -103,16 +104,22 @@ const MOVE_TYPES: MoveType[] = ["out_invoice", "out_refund", "in_invoice", "in_r
 export async function listMoves(type: string, filter: string, q: string) {
   await boot();
   const moveType = MOVE_TYPES.includes(type as MoveType) ? (type as MoveType) : "out_invoice";
-  const rows = await Move.find({ moveType }).populate("partnerId", "name").sort({ invoiceDate: -1, number: -1 }).lean();
+  const [rows, cards] = await Promise.all([
+    Move.find({ moveType }).populate("partnerId", "name").sort({ invoiceDate: -1, number: -1 }).lean(),
+    voucherCards(),
+  ]);
   const today = todayISO();
   const mapped = rows.map((row) => {
     const due = isoDate(row.dueDate);
     const open = (row.status === "posted" || row.status === "partial") && row.residual > 0;
     const late = open && due < today;
+    const primary = cardFor(cards, String(row._id), row.origin || "");
     return {
       id: String(row._id),
       number: row.number,
       partner: partnerName(row.partnerId),
+      guest: primary.guest,
+      detail: primary.detail,
       currency: row.currency,
       invoiceDate: isoDate(row.invoiceDate),
       dueDate: due,
@@ -139,7 +146,7 @@ export async function listMoves(type: string, filter: string, q: string) {
     if (filter === "late" && !row.late) return false;
     if (filter === "paid" && row.status !== "paid") return false;
     if (!query) return true;
-    return `${row.number} ${row.partner} ${row.origin}`.toLowerCase().includes(query);
+    return `${row.number} ${row.partner} ${row.guest} ${row.detail} ${row.origin}`.toLowerCase().includes(query);
   });
   return { moveType, rows: filtered, counts };
 }
@@ -149,7 +156,15 @@ export async function getMove(id: string) {
   if (!mongoose.isValidObjectId(id)) return null;
   const row = await Move.findById(id).populate("partnerId").lean();
   if (!row) return null;
-  const payments = await Payment.find({ status: "posted", "allocations.moveId": row._id }).sort({ date: -1 }).lean();
+  const [payments, advances] = await Promise.all([
+    Payment.find({ status: "posted", "allocations.moveId": row._id }).sort({ date: -1 }).lean(),
+    Receipt.find({ status: "posted", "allocations.moveId": row._id }).sort({ date: -1 }).lean(),
+  ]);
+  const linked = await Voucher.findOne({
+    $or: [{ invoiceId: row._id }, { billId: row._id }, ...(row.origin ? [{ number: row.origin }] : [])],
+  })
+    .select("paxName service checkIn checkOut details")
+    .lean();
   const accounts = await Account.find().lean();
   const accountName = new Map(accounts.map((account) => [String(account._id), `${account.code} · ${account.name}`]));
   const partner = row.partnerId && typeof row.partnerId === "object" ? serializePartner(row.partnerId as never) : null;
@@ -165,6 +180,8 @@ export async function getMove(id: string) {
     dueDate: isoDate(row.dueDate),
     narration: row.narration || "",
     origin: row.origin || "",
+    guest: linked ? String(linked.paxName || "").trim() : "",
+    detail: linked ? voucherServiceDetail(linked) : "",
     lines: row.lines.map((line) => ({
       label: line.label,
       accountId: sid(line.accountId),
@@ -184,17 +201,32 @@ export async function getMove(id: string) {
       (row.status === "posted" || row.status === "partial") &&
       row.residual > 0 &&
       isoDate(row.dueDate) < todayISO(),
-    payments: payments.map((payment) => {
-      const alloc = payment.allocations.find((item) => String(item.moveId) === String(row._id));
-      return {
-        id: String(payment._id),
-        number: payment.number,
-        date: isoDate(payment.date),
-        currency: payment.currency,
-        amount: alloc?.amount || 0,
-        amountLc: alloc?.amountLc || 0,
-      };
-    }),
+    payments: [
+      ...payments.map((payment) => {
+        const alloc = payment.allocations.find((item) => String(item.moveId) === String(row._id));
+        return {
+          id: String(payment._id),
+          href: `/payments/${payment._id}`,
+          number: payment.number,
+          date: isoDate(payment.date),
+          currency: payment.currency,
+          amount: alloc?.amount || 0,
+          amountLc: alloc?.amountLc || 0,
+        };
+      }),
+      ...advances.map((receipt) => {
+        const alloc = (receipt.allocations || []).find((item) => String(item.moveId) === String(row._id));
+        return {
+          id: String(receipt._id),
+          href: `/receipts/${receipt._id}`,
+          number: receipt.number,
+          date: isoDate(receipt.date),
+          currency: "KWD",
+          amount: alloc?.amount || 0,
+          amountLc: alloc?.amountLc || 0,
+        };
+      }),
+    ],
   };
 }
 
@@ -375,6 +407,26 @@ export async function getReceipt(id: string) {
   const [accounts, partners] = await Promise.all([Account.find().lean(), Partner.find().lean()]);
   const accountName = new Map(accounts.map((account) => [String(account._id), account]));
   const partnersById = new Map(partners.map((partner) => [String(partner._id), partner.name]));
+  let advanceLc = 0;
+  let partnerId = "";
+  let side: "supplier" | "customer" | "" = "";
+  for (const line of row.lines) {
+    const account = accountName.get(sid(line.accountId));
+    if (!account || !line.partnerId) continue;
+    if ((account.subtype === "payable" || account.subtype === "prepayment") && line.debit > 0) {
+      advanceLc = round(advanceLc + line.debit, 3);
+      partnerId = sid(line.partnerId);
+      side = "supplier";
+    }
+    if ((account.subtype === "receivable" || account.code === "21000") && line.credit > 0) {
+      advanceLc = round(advanceLc + line.credit, 3);
+      partnerId = sid(line.partnerId);
+      side = "customer";
+    }
+  }
+  const usedLc = round((row.allocations || []).reduce((sum, item) => sum + (item.amountLc || 0), 0), 3);
+  const allocatedMoves = await Move.find({ _id: { $in: (row.allocations || []).map((item) => item.moveId) } }).select("number currency").lean();
+  const moveOf = new Map(allocatedMoves.map((move) => [String(move._id), move]));
   return {
     id: String(row._id),
     number: row.number,
@@ -403,6 +455,19 @@ export async function getReceipt(id: string) {
         chequeNo: line.chequeNo || "",
         chequeDate: isoDate(line.chequeDate),
         bankName: line.bankName || "",
+      };
+    }),
+    advance: side
+      ? { side, partnerId, partner: partnersById.get(partnerId) || "", totalLc: advanceLc, usedLc, openLc: round(advanceLc - usedLc, 3) }
+      : null,
+    allocations: (row.allocations || []).map((item) => {
+      const move = moveOf.get(String(item.moveId));
+      return {
+        moveId: String(item.moveId),
+        number: move?.number || "Document",
+        currency: move?.currency || "KWD",
+        amount: item.amount,
+        amountLc: item.amountLc,
       };
     }),
   };
@@ -684,7 +749,9 @@ export async function reportAged(kind: "receivable" | "payable", asOf: string) {
   const asOfTime = new Date(`${asOf}T12:00:00.000Z`).getTime();
   type Bucket = { current: number; d30: number; d60: number; d90: number; d90p: number; total: number };
   const empty = (): Bucket => ({ current: 0, d30: 0, d60: 0, d90: 0, d90p: 0, total: 0 });
+  const cards = await voucherCards();
   const partners = new Map<string, { name: string; bucket: Bucket }>();
+  const documents: { id: string; number: string; partner: string; guest: string; detail: string; open: number }[] = [];
   for (const row of rows) {
     const sign = row.moveType === refundType ? -1 : 1;
     const amount = round(row.residualLc * sign, 3);
@@ -695,7 +762,17 @@ export async function reportAged(kind: "receivable" | "payable", asOf: string) {
     entry.bucket[slot] = round(entry.bucket[slot] + amount, 3);
     entry.bucket.total = round(entry.bucket.total + amount, 3);
     partners.set(key, entry);
+    const primary = cardFor(cards, String(row._id), row.origin || "");
+    documents.push({
+      id: String(row._id),
+      number: row.number,
+      partner: entry.name,
+      guest: primary.guest,
+      detail: primary.detail,
+      open: amount,
+    });
   }
+  documents.sort((a, b) => a.partner.localeCompare(b.partner) || a.number.localeCompare(b.number));
   const list = [...partners.values()].filter((row) => row.bucket.total !== 0).sort((a, b) => a.name.localeCompare(b.name));
   const totals = empty();
   for (const row of list) {
@@ -706,7 +783,7 @@ export async function reportAged(kind: "receivable" | "payable", asOf: string) {
     totals.d90p = round(totals.d90p + row.bucket.d90p, 3);
     totals.total = round(totals.total + row.bucket.total, 3);
   }
-  return { kind, asOf, rows: list, totals };
+  return { kind, asOf, rows: list, totals, documents };
 }
 
 export async function reportCash(from: string, to: string) {
@@ -767,16 +844,6 @@ export async function reportLedger(accountId: string, asOf: string) {
   return { account: serializeAccount(account), asOf, lines, balance };
 }
 
-function shownDate(value: unknown) {
-  if (!value) return "";
-  const text = formatDate(value as string | Date);
-  return text === "—" ? "" : text;
-}
-
-function detailParts(...values: unknown[]) {
-  return values.map((value) => String(value || "").trim()).filter(Boolean).join(" · ");
-}
-
 function isDocRef(value: string) {
   return /^[A-Z]{2,6}-\d{4}-\d+$/.test(value.trim());
 }
@@ -788,33 +855,23 @@ function readableDetail(value: string, ref = "") {
   return text;
 }
 
-function ledgerServiceDetail(voucher: {
-  service?: string;
-  checkIn?: Date | string | null;
-  checkOut?: Date | string | null;
-  details?: Record<string, unknown> | null;
-}) {
-  const details = voucher.details || {};
-  const service = String(voucher.service || "HOTEL").trim().toUpperCase();
-  if (service === "FLIGHT") {
-    const flight = [details.airline, details.flightNo].map((value) => String(value || "").trim()).filter(Boolean).join(" ");
-    const from = String(details.from || "").trim();
-    const to = String(details.to || "").trim();
-    const route = from && to ? `${from} → ${to}` : from || to;
-    return detailParts(flight, route);
+async function voucherCards() {
+  const vouchers = await Voucher.find({ $or: [{ invoiceId: { $ne: null } }, { billId: { $ne: null } }] })
+    .select("number paxName service checkIn checkOut details invoiceId billId")
+    .lean();
+  const byMove = new Map<string, { guest: string; detail: string }>();
+  const byNumber = new Map<string, { guest: string; detail: string }>();
+  for (const voucher of vouchers) {
+    const card = { guest: String(voucher.paxName || "").trim(), detail: voucherServiceDetail(voucher) };
+    byNumber.set(voucher.number, card);
+    if (voucher.invoiceId) byMove.set(String(voucher.invoiceId), card);
+    if (voucher.billId) byMove.set(String(voucher.billId), card);
   }
-  if (service === "ACTIVITY") return detailParts(details.activityName, shownDate(voucher.checkIn));
-  if (service === "TRANSFER") {
-    const pickup = String(details.pickup || "").trim();
-    const dropoff = String(details.dropoff || "").trim();
-    const route = pickup && dropoff ? `${pickup} → ${dropoff}` : pickup || dropoff || String(details.vehicle || "").trim();
-    return detailParts(route, shownDate(voucher.checkIn));
-  }
-  if (service === "VISA") return detailParts(details.country, details.visaType);
-  const checkIn = shownDate(voucher.checkIn);
-  const checkOut = shownDate(voucher.checkOut);
-  const stay = checkIn && checkOut ? `${checkIn} – ${checkOut}` : checkIn || checkOut;
-  return detailParts(details.hotelName, stay);
+  return { byMove, byNumber };
+}
+
+function cardFor(cards: Awaited<ReturnType<typeof voucherCards>>, id: string, origin: string) {
+  return cards.byMove.get(id) || cards.byNumber.get(origin) || { guest: "", detail: "" };
 }
 
 export async function reportPartner(partnerId: string, asOf: string) {
@@ -857,7 +914,7 @@ export async function reportPartner(partnerId: string, asOf: string) {
       running.set(key, next);
       const move = moveById.get(sid(entry.sourceId)) || moveByNumber.get(line.label || "") || moveByNumber.get(entry.ref);
       const voucher = (move && voucherByMoveId.get(String(move._id))) || (move?.origin ? voucherByNumber.get(move.origin) : undefined);
-      const serviceDetail = voucher ? ledgerServiceDetail(voucher) : "";
+      const serviceDetail = voucher ? voucherServiceDetail(voucher) : "";
       const described = (move?.lines || []).map((row) => readableDetail(row.label || "", move?.number || "")).find(Boolean) || "";
       const sourceId = sid(entry.sourceId);
       const href =

@@ -66,6 +66,16 @@ export default async function MovePage({ params }: { params: Promise<{ id: strin
           </div>
           <Status value={move.status} late={move.late} />
         </div>
+        <dl className="mt-6 grid gap-4 text-sm sm:grid-cols-2">
+          <div>
+            <dt className="text-xs uppercase tracking-[0.14em] text-muted">Guest</dt>
+            <dd className="font-display text-3xl">{move.guest || "—"}</dd>
+          </div>
+          <div>
+            <dt className="text-xs uppercase tracking-[0.14em] text-muted">Detail</dt>
+            <dd className="font-medium">{move.detail || "—"}</dd>
+          </div>
+        </dl>
         <dl className="mt-6 grid gap-4 text-sm sm:grid-cols-4">
           <Item label="Invoice date" value={<When value={move.invoiceDate} />} />
           <Item label="Accounting date" value={<When value={move.accountingDate} />} />
@@ -107,7 +117,7 @@ export default async function MovePage({ params }: { params: Promise<{ id: strin
               <tbody>
                 {move.payments.map((payment) => (
                   <tr key={payment.id}>
-                    <td><Link className="font-semibold hover:text-brass" href={`/payments/${payment.id}`}>{payment.number}</Link></td>
+                    <td><Link className="font-semibold hover:text-brass" href={payment.href}>{payment.number}</Link></td>
                     <td><When value={payment.date} /></td>
                     <td className="num"><Money amount={payment.amount} currency={payment.currency} /></td>
                     <td className="num"><Money amount={payment.amountLc} /></td>

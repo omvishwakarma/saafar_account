@@ -1,9 +1,9 @@
 export const company = {
-  name: "Saafar",
-  short: "Saafar",
+  name: "Alomma Holidays Tourism and Travel",
+  short: "Alomma Holidays Tourism and Travel",
   city: "Kuwait",
   base: "KWD",
-  product: "Safar Books",
+  product: "Alomma Holidays Tourism and Travel",
 };
 
 export const MOVE_META = {

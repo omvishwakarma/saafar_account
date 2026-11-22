@@ -1,4 +1,4 @@
-import { company } from "@/lib/company";
+import { Logo } from "./Logo";
 import { inputClass } from "./ui";
 
 export function AsOfForm({ asOf, from, to, extra }: { asOf?: string; from?: string; to?: string; extra?: Record<string, string> }) {
@@ -42,7 +42,7 @@ export function ReportSheet({
   return (
     <article className={`${wide ? "max-w-none" : "mx-auto max-w-4xl"} rounded-2xl border border-line bg-paper px-6 py-8 shadow-card print:border-0 print:shadow-none md:px-10`}>
       <header className="mb-6 text-center">
-        <div className="text-[11px] font-semibold uppercase tracking-[0.2em] text-muted">{company.name}</div>
+        <Logo className="mx-auto h-16 w-auto" />
         <h1 className="mt-1 font-display text-4xl">{title}</h1>
         <p className="mt-1 text-sm text-muted">{subtitle}</p>
       </header>

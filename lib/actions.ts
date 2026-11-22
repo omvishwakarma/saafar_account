@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { auditChange } from "./audit";
 import { MOVE_META } from "./company";
-import { assertPartnerRole, deleteMove, deletePayment, deleteReceipt, deleteVoucher, postMove, postPayment, postReceipt, reopenMove, reopenPayment, reopenReceipt, saveMove, savePayment, saveReceipt, saveVoucher } from "./accounting";
+import { assertPartnerRole, allocateReceipt, deleteMove, deletePayment, deleteReceipt, deleteVoucher, postMove, postPayment, postReceipt, reopenMove, reopenPayment, reopenReceipt, saveMove, savePayment, saveReceipt, saveVoucher } from "./accounting";
 import { db } from "./db";
 import { num } from "./money";
 import { Account, Currency, Move, Partner, Payment, Receipt, Voucher } from "./models";
@@ -175,6 +175,19 @@ export async function actionPostReceipt(id: string) {
     const receipt = await Receipt.findById(id).select("kind").lean();
     await postReceipt(id);
     await auditChange(`Posted ${receipt?.kind === "payment" ? "payment voucher" : "bank receipt"} ${number}`, id);
+    refresh();
+    return { ok: true as const };
+  } catch (error) {
+    return fail(error);
+  }
+}
+
+export async function actionAllocateReceipt(id: string, rows: { moveId: string; amount: number }[]) {
+  try {
+    const number = await numberOf(Receipt, id);
+    await allocateReceipt(id, rows);
+    const applied = rows.filter((row) => row.amount > 0).map((row) => row.amount).join(", ");
+    await auditChange(`Allocated advance on ${number} (${applied})`, id);
     refresh();
     return { ok: true as const };
   } catch (error) {

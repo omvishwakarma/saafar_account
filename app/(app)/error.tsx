@@ -1,10 +1,12 @@
 "use client";
 
+import { Logo } from "@/components/Logo";
+
 export default function Error({ error, reset }: { error: Error & { digest?: string }; reset: () => void }) {
   const offline = /Mongo|ECONNREFUSED|buffering timed out|Server selection|connect/i.test(error.message);
   return (
     <div className="mx-auto max-w-xl py-16">
-      <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-brass">Safar Books</div>
+      <Logo className="h-14 w-auto" />
       <h1 className="mt-2 font-display text-4xl">{offline ? "MongoDB is not running" : "The books could not be opened"}</h1>
       <p className="mt-3 text-sm text-muted">{error.message}</p>
       {offline && (

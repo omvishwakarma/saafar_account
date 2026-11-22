@@ -1,3 +1,4 @@
+import { company } from "./company";
 import { isEnvOwner } from "./session";
 import { db } from "./db";
 import { User } from "./models";
@@ -24,7 +25,7 @@ export async function ensureOwner() {
   if (existing) return existing;
   return User.create({
     username,
-    name: "Saafar admin",
+    name: company.name,
     role: "admin",
     passwordHash: await hashPassword(password),
     active: true,

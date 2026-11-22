@@ -202,6 +202,7 @@ const ReceiptSchema = new Schema(
     reference: { type: String, default: "" },
     remarks: { type: String, default: "" },
     lines: { type: [ReceiptLineSchema], default: [] },
+    allocations: { type: [AllocationSchema], default: [] },
     totalDebit: { type: Number, default: 0 },
     totalCredit: { type: Number, default: 0 },
     status: { type: String, enum: ["draft", "posted"], default: "draft" },

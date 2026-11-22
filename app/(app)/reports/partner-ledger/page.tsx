@@ -43,7 +43,6 @@ export default async function PartnerLedgerPage({
         <p className="text-sm text-muted">Choose a customer or vendor to see every ledger line in their name.</p>
       ) : (
         <ReportSheet wide title={report.partner.name} subtitle={`Partner ledger as of ${formatDate(asOf)} · KWD`}>
-          <img src="/saafar-logo.png" alt="Saafar" className="report-logo" />
           {report.sections.length === 0 && <p className="text-sm text-muted">No posted lines for this partner yet.</p>}
           {report.sections.map((section) => {
             const showUsd = section.lines.some((line) => line.usd);

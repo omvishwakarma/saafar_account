@@ -36,6 +36,8 @@ export default async function MovesPage({
                 <tr>
                   <th>Number</th>
                   <th>{meta.party}</th>
+                  <th>Guest</th>
+                  <th>Detail</th>
                   <th>Date</th>
                   <th>Due</th>
                   <th className="num">Untaxed</th>
@@ -52,6 +54,8 @@ export default async function MovesPage({
                       {row.origin && <div className="text-xs text-muted">{row.origin}</div>}
                     </td>
                     <td>{row.partner}</td>
+                    <td>{row.guest}</td>
+                    <td>{row.detail}</td>
                     <td><When value={row.invoiceDate} /></td>
                     <td className={row.late ? "text-red-800" : ""}><When value={row.dueDate} /></td>
                     <td className="num">{row.status === "draft" ? "—" : <Money amount={row.untaxed} currency={row.currency} />}</td>

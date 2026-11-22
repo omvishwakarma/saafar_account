@@ -85,7 +85,7 @@ async function runSeed() {
     { name: "Desert Rose Tours", role: "customer", city: "Kuwait", country: "Kuwait", currency: "KWD", email: "hello@desertrose.example", phone: "+965 2200 1106" },
     { name: "Kuwait Airways Staff Club", role: "customer", city: "Kuwait", country: "Kuwait", currency: "KWD", email: "club@kuwaitairways.example", phone: "+965 2200 1107" },
     { name: "Sakina Corporate", role: "customer", city: "Kuwait", country: "Kuwait", currency: "USD", email: "travel@sakinacorp.example", phone: "+965 2200 1108" },
-    { name: "Saafar", role: "vendor", city: "Kuwait", country: "Kuwait", currency: "KWD", email: "vendor-bills@saafar.example", phone: "+965 1800 3001" },
+    { name: "Alomma Holidays Tourism and Travel", role: "vendor", city: "Kuwait", country: "Kuwait", currency: "KWD", email: "vendor-bills@alomma.example", phone: "+965 1800 3001" },
     { name: "Air India", role: "vendor", city: "Delhi", country: "India", currency: "USD", email: "trade@airindia.example", phone: "+91 11 4000 1001" },
     { name: "Alomma Farwaniya", role: "vendor", city: "Kuwait", country: "Kuwait", currency: "KWD", email: "farwaniya@alomma.example", phone: "+965 1800 3003" },
     { name: "Hilton Kuwait", role: "vendor", city: "Kuwait", country: "Kuwait", currency: "KWD", email: "ar@hiltonkuwait.example", phone: "+965 1800 3004" },
@@ -255,13 +255,13 @@ async function runSeed() {
 
   await saveMove({
     moveType: "in_invoice",
-    partnerId: partnerId("Saafar"),
+    partnerId: partnerId("Alomma Holidays Tourism and Travel"),
     currency: "KWD",
     rate: 1,
     invoiceDate: "2026-11-06",
     accountingDate: "2026-11-06",
     dueDate: "2026-11-20",
-    narration: "Saafar hotel file",
+    narration: "Hotel file",
     lines: [line("Hotel file November", "50000", 120000)],
     post: true,
   });
@@ -409,7 +409,7 @@ async function runSeed() {
   await saveVoucher({
     date: "2026-11-18",
     paxName: "Fatima Al Sabah",
-    supplierId: partnerId("Saafar"),
+    supplierId: partnerId("Alomma Holidays Tourism and Travel"),
     customerId: partnerId("Desert Rose Tours"),
     service: "HOTEL",
     city: "KUWAIT",
@@ -478,7 +478,7 @@ async function runSeed() {
 
   const balance = await booksBalance();
   if (Math.abs(balance.diff) > 0.05) {
-    console.error("Safar Books is out of balance after seed", balance);
+    console.error("Books are out of balance after seed", balance);
   }
   await Meta.create({ key: "seeded", value: "1" });
   ready = true;

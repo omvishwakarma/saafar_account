@@ -87,19 +87,6 @@ input[type="number"]::-webkit-inner-spin-button {
   margin: 0;
 }
 
-.report-logo {
-  display: none;
-}
-
-@media print {
-  .report-logo {
-    display: block;
-    height: 48px;
-    width: auto;
-    margin: 0 auto 16px;
-  }
-}
-
 @media print {
   aside,
   .no-print {

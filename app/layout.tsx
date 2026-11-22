@@ -1,12 +1,13 @@
 import type { Metadata } from "next";
 import { Fraunces, Manrope } from "next/font/google";
+import { company } from "@/lib/company";
 import "./globals.css";
 
 const sans = Manrope({ subsets: ["latin"], variable: "--font-sans" });
 const display = Fraunces({ subsets: ["latin"], variable: "--font-display" });
 
 export const metadata: Metadata = {
-  title: { default: "Safar Books", template: "%s · Safar Books" },
+  title: { default: company.name, template: `%s · ${company.name}` },
   description: "Multi-currency accounting for a travel company. Invoices, hotel vouchers, receipts, and ledgers in Kuwaiti Dinar.",
 };
 
