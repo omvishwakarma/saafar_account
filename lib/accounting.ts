@@ -201,11 +201,51 @@ export async function postMove(id: string) {
   return move;
 }
 
+async function paymentsOn(moveId: unknown) {
+  return Payment.countDocuments({ status: "posted", "allocations.moveId": moveId });
+}
+
+async function detachVoucher(moveId: unknown) {
+  const voucher = await Voucher.findOne({ $or: [{ invoiceId: moveId }, { billId: moveId }] });
+  if (!voucher) return;
+  const unset: Record<string, 1> = {};
+  if (String(voucher.invoiceId || "") === String(moveId)) unset.invoiceId = 1;
+  if (String(voucher.billId || "") === String(moveId)) unset.billId = 1;
+  const invoiceLeft = unset.invoiceId ? null : voucher.invoiceId;
+  const billLeft = unset.billId ? null : voucher.billId;
+  const set: Record<string, string> = {};
+  if (!invoiceLeft && !billLeft) set.status = "draft";
+  await Voucher.updateOne(
+    { _id: voucher._id },
+    { ...(Object.keys(set).length ? { $set: set } : {}), $unset: unset },
+  );
+}
+
+export async function reopenMove(id: string) {
+  await db();
+  const move = await Move.findById(id);
+  if (!move) throw new Error("Document not found");
+  if (move.status === "draft") return;
+  if (await paymentsOn(move._id)) throw new Error("Delete the receipt on this document before editing it");
+  await JournalEntry.deleteMany({ source: "invoice", sourceId: move._id });
+  await Move.updateOne(
+    { _id: move._id },
+    {
+      $set: { status: "draft", residual: move.amountTotal, residualLc: move.amountTotalLc },
+      $unset: { journalEntryId: 1 },
+    },
+  );
+}
+
 export async function deleteMove(id: string) {
   await db();
   const move = await Move.findById(id);
   if (!move) throw new Error("Document not found");
-  if (move.status !== "draft") throw new Error("Posted documents stay in the books");
+  if (move.status !== "draft") {
+    if (await paymentsOn(move._id)) throw new Error("Delete the receipt on this document before deleting it");
+    await JournalEntry.deleteMany({ source: "invoice", sourceId: move._id });
+    await detachVoucher(move._id);
+  }
   await move.deleteOne();
 }
 
@@ -411,11 +451,50 @@ export async function postPayment(id: string) {
   }
 }
 
+async function releasePostedPayment(payment: {
+  _id: unknown;
+  status: string;
+  allocations: { moveId: unknown; amount: number; amountLc: number }[];
+}) {
+  if (payment.status !== "posted") return;
+  for (const alloc of payment.allocations) {
+    const move = await Move.findById(alloc.moveId);
+    if (!move || move.status === "draft") continue;
+    const dp = decimals(move.currency);
+    const dust = 10 ** -dp / 2;
+    move.residual = round(Math.min(move.amountTotal, (move.residual || 0) + alloc.amount), dp);
+    move.residualLc = round(Math.min(move.amountTotalLc, (move.residualLc || 0) + (alloc.amountLc || 0)), 3);
+    if (move.residual <= dust) {
+      move.residual = 0;
+      move.residualLc = 0;
+      move.status = "paid";
+    } else if (move.amountTotal - move.residual <= dust) {
+      move.status = "posted";
+    } else {
+      move.status = "partial";
+    }
+    await move.save();
+  }
+  await JournalEntry.deleteMany({ source: "payment", sourceId: payment._id });
+}
+
+export async function reopenPayment(id: string) {
+  await db();
+  const payment = await Payment.findById(id);
+  if (!payment) throw new Error("Payment not found");
+  if (payment.status === "draft") return;
+  await releasePostedPayment(payment);
+  await Payment.updateOne(
+    { _id: payment._id },
+    { $set: { status: "draft", amountLc: 0, fxGain: 0 }, $unset: { journalEntryId: 1 } },
+  );
+}
+
 export async function deletePayment(id: string) {
   await db();
   const payment = await Payment.findById(id);
   if (!payment) throw new Error("Payment not found");
-  if (payment.status !== "draft") throw new Error("Posted payments stay in the books");
+  if (payment.status !== "draft") await releasePostedPayment(payment);
   await payment.deleteOne();
 }
 
@@ -687,11 +766,20 @@ export async function postReceipt(id: string) {
   await receipt.save();
 }
 
+export async function reopenReceipt(id: string) {
+  await db();
+  const receipt = await Receipt.findById(id);
+  if (!receipt) throw new Error("Voucher not found");
+  if (receipt.status === "draft") return;
+  await JournalEntry.deleteMany({ source: "receipt", sourceId: receipt._id });
+  await Receipt.updateOne({ _id: receipt._id }, { $set: { status: "draft" }, $unset: { journalEntryId: 1 } });
+}
+
 export async function deleteReceipt(id: string) {
   await db();
   const receipt = await Receipt.findById(id);
   if (!receipt) throw new Error("Voucher not found");
-  if (receipt.status !== "draft") throw new Error("Posted vouchers stay in the books");
+  if (receipt.status !== "draft") await JournalEntry.deleteMany({ source: "receipt", sourceId: receipt._id });
   await receipt.deleteOne();
 }
 

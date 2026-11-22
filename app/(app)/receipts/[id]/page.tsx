@@ -1,20 +1,64 @@
 import { notFound } from "next/navigation";
-import { PostBar } from "@/components/PostBar";
+import { DocumentTools } from "@/components/DocumentTools";
 import { PrintButton } from "@/components/PrintButton";
+import { ReceiptForm } from "@/components/ReceiptForm";
 import { Money, PageHeader, Panel, Status, When } from "@/components/ui";
-import { getReceipt } from "@/lib/queries";
+import { getReceipt, masters } from "@/lib/queries";
 
 export default async function ReceiptPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const receipt = await getReceipt(id);
   if (!receipt) notFound();
+  if (receipt.status === "draft") {
+    const data = await masters();
+    return (
+      <div>
+        <PageHeader
+          eyebrow={receipt.kind === "receipt" ? "Bank receipt" : "Payment voucher"}
+          title={receipt.number}
+          sub="Draft"
+        />
+        <ReceiptForm
+          kind={receipt.kind}
+          accounts={data.accounts}
+          partners={data.partners}
+          currencies={data.currencies}
+          initial={{
+            id: receipt.id,
+            date: receipt.date,
+            branch: receipt.branch,
+            party: receipt.party,
+            reference: receipt.reference,
+            remarks: receipt.remarks,
+            lines: receipt.lines.map((line) => ({
+              accountId: line.accountId,
+              partnerId: line.partnerId,
+              remarks: line.remarks,
+              currency: line.currency,
+              rate: line.rate,
+              fcAmount: line.fcAmount,
+              side: line.debit > 0 ? "debit" : "credit",
+              chequeNo: line.chequeNo,
+              chequeDate: line.chequeDate,
+              bankName: line.bankName,
+            })),
+          }}
+        />
+      </div>
+    );
+  }
   return (
     <div>
       <PageHeader
         eyebrow={receipt.kind === "receipt" ? "Bank receipt" : "Payment voucher"}
         title={receipt.number}
         sub={[receipt.branch, receipt.party, receipt.reference].filter(Boolean).join(" · ")}
-        action={<PrintButton />}
+        action={
+          <>
+            <DocumentTools kind="receipt" id={receipt.id} back={`/receipts?kind=${receipt.kind}`} />
+            <PrintButton />
+          </>
+        }
       />
       <Panel className="p-5">
         <div className="mb-4 flex items-center justify-between">
@@ -51,11 +95,6 @@ export default async function ReceiptPage({ params }: { params: Promise<{ id: st
             </tfoot>
           </table>
         </div>
-        {receipt.status === "draft" && (
-          <div className="mt-4">
-            <PostBar kind="receipt" id={receipt.id} back={`/receipts?kind=${receipt.kind}`} />
-          </div>
-        )}
       </Panel>
     </div>
   );

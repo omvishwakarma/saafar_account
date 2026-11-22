@@ -1,21 +1,59 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { PostBar } from "@/components/PostBar";
+import { DocumentTools } from "@/components/DocumentTools";
+import { PaymentForm } from "@/components/PaymentForm";
 import { PrintButton } from "@/components/PrintButton";
 import { Money, PageHeader, Panel, Status, When } from "@/components/ui";
-import { getPayment } from "@/lib/queries";
+import { getPayment, masters, openMoves } from "@/lib/queries";
 
 export default async function PaymentPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const payment = await getPayment(id);
   if (!payment) notFound();
+  if (payment.status === "draft") {
+    const data = await masters();
+    const open = await openMoves();
+    return (
+      <div>
+        <PageHeader
+          eyebrow={payment.paymentType === "receive" ? "Customer receipt" : "Vendor payment"}
+          title={payment.number}
+          sub="Draft"
+        />
+        <PaymentForm
+          partners={data.partners}
+          currencies={data.currencies}
+          banks={data.accounts.filter((account) => account.subtype === "bank" || account.subtype === "cash")}
+          open={open}
+          initial={{
+            id: payment.id,
+            paymentType: payment.paymentType,
+            partnerId: payment.partnerId,
+            currency: payment.currency,
+            rate: payment.rate,
+            amount: payment.amount,
+            accountId: payment.accountId,
+            method: payment.method,
+            date: payment.date,
+            memo: payment.memo,
+            allocations: payment.allocations.map((row) => ({ moveId: row.moveId, amount: row.amount })),
+          }}
+        />
+      </div>
+    );
+  }
   return (
     <div className="mx-auto max-w-3xl">
       <PageHeader
         eyebrow={payment.paymentType === "receive" ? "Customer receipt" : "Vendor payment"}
         title={payment.number}
         sub={payment.memo || "Payment"}
-        action={<PrintButton />}
+        action={
+          <>
+            <DocumentTools kind="payment" id={payment.id} back={`/payments?type=${payment.paymentType}`} />
+            <PrintButton />
+          </>
+        }
       />
       <Panel className="p-6">
         <div className="flex items-start justify-between">
@@ -44,11 +82,6 @@ export default async function PaymentPage({ params }: { params: Promise<{ id: st
             ))}
           </tbody>
         </table>
-        {payment.status === "draft" && (
-          <div className="mt-6">
-            <PostBar kind="payment" id={payment.id} back="/payments" />
-          </div>
-        )}
       </Panel>
     </div>
   );

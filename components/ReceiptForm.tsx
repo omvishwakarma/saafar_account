@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { actionSaveReceipt } from "@/lib/actions";
+import { actionDeleteReceipt, actionSaveReceipt } from "@/lib/actions";
 import { round, toBase, todayISO } from "@/lib/money";
 import type { AccountRow, CurrencyRow, PartnerRow, ReceiptLineInput } from "@/lib/types";
 import { Button, Field, inputClass } from "./ui";
@@ -25,22 +25,36 @@ export function ReceiptForm({
   accounts,
   partners,
   currencies,
+  initial,
 }: {
   kind: "receipt" | "payment";
   accounts: AccountRow[];
   partners: PartnerRow[];
   currencies: CurrencyRow[];
+  initial?: {
+    id: string;
+    date: string;
+    branch: string;
+    party: string;
+    reference: string;
+    remarks: string;
+    lines: ReceiptLineInput[];
+  };
 }) {
   const router = useRouter();
-  const [date, setDate] = useState(todayISO());
-  const [branch, setBranch] = useState("AlOmma");
-  const [party, setParty] = useState("");
-  const [reference, setReference] = useState("");
-  const [remarks, setRemarks] = useState("");
-  const [lines, setLines] = useState<ReceiptLineInput[]>([
-    { ...blank(accounts.find((account) => account.subtype === "bank")?.id || accounts[0]?.id || ""), side: kind === "receipt" ? "debit" : "credit" },
-    { ...blank(accounts.find((account) => account.subtype === (kind === "receipt" ? "receivable" : "expense"))?.id || accounts[0]?.id || ""), side: kind === "receipt" ? "credit" : "debit" },
-  ]);
+  const [date, setDate] = useState(initial?.date || todayISO());
+  const [branch, setBranch] = useState(initial?.branch || "AlOmma");
+  const [party, setParty] = useState(initial?.party || "");
+  const [reference, setReference] = useState(initial?.reference || "");
+  const [remarks, setRemarks] = useState(initial?.remarks || "");
+  const [lines, setLines] = useState<ReceiptLineInput[]>(
+    initial?.lines.length
+      ? initial.lines
+      : [
+          { ...blank(accounts.find((account) => account.subtype === "bank")?.id || accounts[0]?.id || ""), side: kind === "receipt" ? "debit" : "credit" },
+          { ...blank(accounts.find((account) => account.subtype === (kind === "receipt" ? "receivable" : "expense"))?.id || accounts[0]?.id || ""), side: kind === "receipt" ? "credit" : "debit" },
+        ],
+  );
   const [error, setError] = useState("");
   const [pending, start] = useTransition();
 
@@ -56,6 +70,7 @@ export function ReceiptForm({
     setError("");
     start(async () => {
       const result = await actionSaveReceipt({
+        id: initial?.id,
         kind,
         date,
         branch,
@@ -163,9 +178,26 @@ export function ReceiptForm({
         </div>
       </div>
       {error && <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-800">{error}</p>}
-      <div className="flex gap-2">
+      <div className="flex flex-wrap gap-2">
         <Button type="button" variant="ghost" disabled={pending} onClick={() => submit(false)}>Save draft</Button>
         <Button type="submit" disabled={pending || Math.abs(difference) > 0.001}>{pending ? "Posting…" : "Post to the ledger"}</Button>
+        {initial?.id && (
+          <Button
+            type="button"
+            variant="danger"
+            disabled={pending}
+            onClick={() => {
+              if (!window.confirm("Delete this document? Its ledger entry will be removed.")) return;
+              start(async () => {
+                const result = await actionDeleteReceipt(initial.id);
+                if (!result.ok) setError(result.error);
+                else router.push(`/receipts?kind=${kind}`);
+              });
+            }}
+          >
+            Delete
+          </Button>
+        )}
       </div>
     </form>
   );

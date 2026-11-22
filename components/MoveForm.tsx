@@ -222,7 +222,7 @@ export function MoveForm({
               });
             }}
           >
-            Delete draft
+            Delete
           </Button>
         )}
       </div>

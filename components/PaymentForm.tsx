@@ -2,7 +2,7 @@
 
 import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { actionSavePayment } from "@/lib/actions";
+import { actionDeletePayment, actionSavePayment } from "@/lib/actions";
 import { formatMoney, todayISO } from "@/lib/money";
 import { settle } from "@/lib/payment-math";
 import type { AccountRow, CurrencyRow, OpenMove, PartnerRow } from "@/lib/types";
@@ -14,27 +14,42 @@ export function PaymentForm({
   banks,
   open,
   preset,
+  initial,
 }: {
   partners: PartnerRow[];
   currencies: CurrencyRow[];
   banks: AccountRow[];
   open: OpenMove[];
   preset?: { paymentType?: "receive" | "send"; partnerId?: string; moveId?: string };
+  initial?: {
+    id: string;
+    paymentType: "receive" | "send";
+    partnerId: string;
+    currency: string;
+    rate: number;
+    amount: number;
+    accountId: string;
+    method: string;
+    date: string;
+    memo: string;
+    allocations: { moveId: string; amount: number }[];
+  };
 }) {
   const router = useRouter();
   const presetMove = open.find((row) => row.id === preset?.moveId);
-  const [paymentType, setPaymentType] = useState<"receive" | "send">(preset?.paymentType || "receive");
+  const [paymentType, setPaymentType] = useState<"receive" | "send">(initial?.paymentType || preset?.paymentType || "receive");
   const role = paymentType === "receive" ? "customer" : "vendor";
   const people = partners.filter((partner) => partner.role === role || partner.role === "both");
-  const [partnerId, setPartnerId] = useState(preset?.partnerId || presetMove?.partnerId || people[0]?.id || "");
-  const [currency, setCurrency] = useState(presetMove?.currency || "KWD");
-  const [rate, setRate] = useState(presetMove?.rate || 1);
-  const [amount, setAmount] = useState(presetMove?.residual || 0);
-  const [accountId, setAccountId] = useState(banks[0]?.id || "");
-  const [method, setMethod] = useState("Bank transfer");
-  const [date, setDate] = useState(todayISO());
-  const [memo, setMemo] = useState("");
+  const [partnerId, setPartnerId] = useState(initial?.partnerId || preset?.partnerId || presetMove?.partnerId || people[0]?.id || "");
+  const [currency, setCurrency] = useState(initial?.currency || presetMove?.currency || "KWD");
+  const [rate, setRate] = useState(initial?.rate || presetMove?.rate || 1);
+  const [amount, setAmount] = useState(initial?.amount ?? (presetMove?.residual || 0));
+  const [accountId, setAccountId] = useState(initial?.accountId || banks[0]?.id || "");
+  const [method, setMethod] = useState(initial?.method || "Bank transfer");
+  const [date, setDate] = useState(initial?.date || todayISO());
+  const [memo, setMemo] = useState(initial?.memo || "");
   const [alloc, setAlloc] = useState<Record<string, number>>(() => {
+    if (initial?.allocations.length) return Object.fromEntries(initial.allocations.map((row) => [row.moveId, row.amount]));
     if (!preset?.moveId) return {};
     const move = open.find((row) => row.id === preset.moveId);
     return move ? { [move.id]: move.residual } : {};
@@ -71,6 +86,7 @@ export function PaymentForm({
     setError("");
     start(async () => {
       const result = await actionSavePayment({
+        id: initial?.id,
         paymentType,
         partnerId,
         currency,
@@ -222,9 +238,26 @@ export function PaymentForm({
         </div>
       )}
       {error && <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-800">{error}</p>}
-      <div className="flex gap-2">
+      <div className="flex flex-wrap gap-2">
         <Button type="button" variant="ghost" disabled={pending} onClick={() => submit(false)}>Save draft</Button>
         <Button type="submit" disabled={pending}>{pending ? "Posting…" : "Confirm payment"}</Button>
+        {initial?.id && (
+          <Button
+            type="button"
+            variant="danger"
+            disabled={pending}
+            onClick={() => {
+              if (!window.confirm("Delete this document? Its ledger entry will be removed.")) return;
+              start(async () => {
+                const result = await actionDeletePayment(initial.id);
+                if (!result.ok) setError(result.error);
+                else router.push(`/payments?type=${paymentType}`);
+              });
+            }}
+          >
+            Delete
+          </Button>
+        )}
       </div>
     </form>
   );

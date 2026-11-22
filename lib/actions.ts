@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { auditChange } from "./audit";
 import { MOVE_META } from "./company";
-import { assertPartnerRole, deleteMove, deletePayment, deleteReceipt, deleteVoucher, postMove, postPayment, postReceipt, saveMove, savePayment, saveReceipt, saveVoucher } from "./accounting";
+import { assertPartnerRole, deleteMove, deletePayment, deleteReceipt, deleteVoucher, postMove, postPayment, postReceipt, reopenMove, reopenPayment, reopenReceipt, saveMove, savePayment, saveReceipt, saveVoucher } from "./accounting";
 import { db } from "./db";
 import { num } from "./money";
 import { Account, Currency, Move, Partner, Payment, Receipt, Voucher } from "./models";
@@ -52,11 +52,23 @@ export async function actionPostMove(id: string) {
   }
 }
 
+export async function actionReopenMove(id: string) {
+  try {
+    const number = await numberOf(Move, id);
+    await reopenMove(id);
+    await auditChange(`Reopened ${number} for editing`, id);
+    refresh();
+    return { ok: true as const };
+  } catch (error) {
+    return fail(error);
+  }
+}
+
 export async function actionDeleteMove(id: string) {
   try {
     const number = await numberOf(Move, id);
     await deleteMove(id);
-    await auditChange(`Deleted draft ${number}`, id);
+    await auditChange(`Deleted ${number}`, id);
     refresh();
     return { ok: true as const };
   } catch (error) {
@@ -92,11 +104,23 @@ export async function actionPostPayment(id: string) {
   }
 }
 
+export async function actionReopenPayment(id: string) {
+  try {
+    const number = await numberOf(Payment, id);
+    await reopenPayment(id);
+    await auditChange(`Reopened ${number} for editing`, id);
+    refresh();
+    return { ok: true as const };
+  } catch (error) {
+    return fail(error);
+  }
+}
+
 export async function actionDeletePayment(id: string) {
   try {
     const number = await numberOf(Payment, id);
     await deletePayment(id);
-    await auditChange(`Deleted draft ${number}`, id);
+    await auditChange(`Deleted ${number}`, id);
     refresh();
     return { ok: true as const };
   } catch (error) {
@@ -158,11 +182,23 @@ export async function actionPostReceipt(id: string) {
   }
 }
 
+export async function actionReopenReceipt(id: string) {
+  try {
+    const number = await numberOf(Receipt, id);
+    await reopenReceipt(id);
+    await auditChange(`Reopened ${number} for editing`, id);
+    refresh();
+    return { ok: true as const };
+  } catch (error) {
+    return fail(error);
+  }
+}
+
 export async function actionDeleteReceipt(id: string) {
   try {
     const number = await numberOf(Receipt, id);
     await deleteReceipt(id);
-    await auditChange(`Deleted draft ${number}`, id);
+    await auditChange(`Deleted ${number}`, id);
     refresh();
     return { ok: true as const };
   } catch (error) {

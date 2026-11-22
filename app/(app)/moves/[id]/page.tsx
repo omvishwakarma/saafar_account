@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { DocumentTools } from "@/components/DocumentTools";
 import { MoveForm } from "@/components/MoveForm";
 import { PrintButton } from "@/components/PrintButton";
 import { Money, PageHeader, Panel, Status, When } from "@/components/ui";
@@ -51,6 +52,7 @@ export default async function MovePage({ params }: { params: Promise<{ id: strin
         action={
           <>
             {payHref && move.residual > 0 && <Link href={payHref} className="rounded-md bg-brass px-3.5 py-2 text-sm font-semibold text-white">Register payment</Link>}
+            <DocumentTools kind="move" id={move.id} back={`/moves?type=${move.moveType}`} />
             <PrintButton />
           </>
         }
