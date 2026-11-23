@@ -129,6 +129,24 @@ export type PartnerInput = {
   country: string;
   currency: string;
   taxId: string;
+  openingAmount?: number;
+  openingDate?: string;
+};
+
+export type JournalLineInput = {
+  accountId: string;
+  partnerId?: string;
+  label: string;
+  currency: string;
+  rate: number;
+  debit: number;
+  credit: number;
+};
+
+export type JournalInput = {
+  date: string;
+  memo: string;
+  lines: JournalLineInput[];
 };
 
 export type CurrencyRow = { id: string; code: string; name: string; rate: number };

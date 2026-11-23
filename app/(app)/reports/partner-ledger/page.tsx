@@ -45,28 +45,18 @@ export default async function PartnerLedgerPage({
         <ReportSheet wide title={report.partner.name} subtitle={`Partner ledger as of ${formatDate(asOf)} · KWD`}>
           {report.sections.length === 0 && <p className="text-sm text-muted">No posted lines for this partner yet.</p>}
           {report.sections.map((section) => {
-            const showUsd = section.lines.some((line) => line.usd);
+            const codes = [...new Set(section.lines.map((line) => line.fcCode).filter(Boolean))];
             return (
               <div key={section.title} className="mt-6 overflow-x-auto">
                 <div className="border border-b-0 border-line bg-[#f6f1e7] px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.16em] text-muted">{section.title}</div>
                 <table className="books ledger">
-                  <colgroup>
-                    <col style={{ width: showUsd ? "11%" : "12%" }} />
-                    <col style={{ width: showUsd ? "13%" : "14%" }} />
-                    <col style={{ width: showUsd ? "14%" : "16%" }} />
-                    <col style={{ width: showUsd ? "24%" : "26%" }} />
-                    {showUsd && <col style={{ width: "10%" }} />}
-                    <col style={{ width: showUsd ? "10%" : "11%" }} />
-                    <col style={{ width: showUsd ? "9%" : "10%" }} />
-                    <col style={{ width: showUsd ? "9%" : "11%" }} />
-                  </colgroup>
                   <thead>
                     <tr>
                       <th>Date</th>
                       <th>Ref</th>
                       <th>Guest</th>
                       <th>Detail</th>
-                      {showUsd && <th className="num">USD</th>}
+                      {codes.map((code) => <th key={code} className="num">{code}</th>)}
                       <th className="num">Debit</th>
                       <th className="num">Credit</th>
                       <th className="num">Balance</th>
@@ -79,7 +69,9 @@ export default async function PartnerLedgerPage({
                         <td>{line.href ? <Link href={line.href} className="font-semibold text-brass hover:underline">{line.ref}</Link> : line.ref}</td>
                         <td className="wrap">{line.guest}</td>
                         <td className="wrap">{line.label}</td>
-                        {showUsd && <td className="num text-muted">{line.usd ? <Money amount={line.usd} currency="USD" /> : ""}</td>}
+                        {codes.map((code) => (
+                          <td key={code} className="num text-muted">{line.fcCode === code && line.fcAmount ? <Money amount={line.fcAmount} currency={code} /> : ""}</td>
+                        ))}
                         <td className="num">{line.debit ? <Money amount={line.debit} /> : ""}</td>
                         <td className="num">{line.credit ? <Money amount={line.credit} /> : ""}</td>
                         <td className="num"><Money amount={line.balance} /></td>

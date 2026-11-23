@@ -11,7 +11,8 @@ type Line = {
   ref: string;
   guest: string;
   label: string;
-  usd: number;
+  fcCode: string;
+  fcAmount: number;
   debit: number;
   credit: number;
   balance: number;
@@ -31,17 +32,21 @@ function subtitle(asOf: string) {
   return `Partner ledger as of ${formatDate(asOf)} · ${company.base}`;
 }
 
-function headers(showUsd: boolean) {
-  return ["Date", "Ref", "Guest", "Detail", ...(showUsd ? ["USD"] : []), "Debit", "Credit", "Balance"];
+function foreignCodes(lines: Line[]) {
+  return [...new Set(lines.map((line) => line.fcCode).filter(Boolean))];
 }
 
-function pdfRow(line: Line, showUsd: boolean) {
+function headers(codes: string[]) {
+  return ["Date", "Ref", "Guest", "Detail", ...codes, "Debit", "Credit", "Balance"];
+}
+
+function pdfRow(line: Line, codes: string[]) {
   return [
     formatDate(line.date),
     line.ref,
     line.guest,
     line.label,
-    ...(showUsd ? [line.usd ? formatMoney(line.usd, "USD") : ""] : []),
+    ...codes.map((code) => (line.fcCode === code && line.fcAmount ? formatMoney(line.fcAmount, code) : "")),
     line.debit ? formatMoney(line.debit) : "",
     line.credit ? formatMoney(line.credit) : "",
     formatMoney(line.balance),
@@ -66,7 +71,7 @@ export function buildPartnerLedgerPdf(report: PartnerLedgerFile) {
     doc.text("No posted lines for this partner yet.", 36, y);
   }
   for (const section of report.sections) {
-    const showUsd = section.lines.some((line) => line.usd);
+    const codes = foreignCodes(section.lines);
     doc.setFont("helvetica", "bold");
     doc.setFontSize(9);
     doc.setTextColor(109, 101, 91);
@@ -75,16 +80,16 @@ export function buildPartnerLedgerPdf(report: PartnerLedgerFile) {
       y = 40;
     }
     doc.text(section.title.toUpperCase(), 36, y);
+    const right: Record<number, { halign: "right" }> = {};
+    for (let index = 4; index < 4 + codes.length + 3; index += 1) right[index] = { halign: "right" };
     autoTable(doc, {
       startY: y + 8,
       margin: { left: 36, right: 36 },
-      head: [headers(showUsd)],
-      body: section.lines.map((line) => pdfRow(line, showUsd)),
+      head: [headers(codes)],
+      body: section.lines.map((line) => pdfRow(line, codes)),
       styles: { fontSize: 8, cellPadding: 4, textColor: [28, 25, 21], lineColor: [229, 220, 203], lineWidth: 0.4 },
       headStyles: { fillColor: [246, 241, 231], textColor: [109, 101, 91], fontStyle: "bold" },
-      columnStyles: showUsd
-        ? { 2: { cellWidth: 80 }, 3: { cellWidth: 190 }, 4: { halign: "right" }, 5: { halign: "right" }, 6: { halign: "right" }, 7: { halign: "right" } }
-        : { 2: { cellWidth: 90 }, 3: { cellWidth: 210 }, 4: { halign: "right" }, 5: { halign: "right" }, 6: { halign: "right" } },
+      columnStyles: { 2: { cellWidth: 80 }, 3: { cellWidth: codes.length ? 150 : 210 }, ...right },
     });
     y = (doc as jsPDF & { lastAutoTable?: { finalY: number } }).lastAutoTable?.finalY ?? y;
     y += 22;
@@ -118,8 +123,8 @@ export async function buildPartnerLedgerXlsx(report: PartnerLedgerFile) {
     sheet.getCell(rowIndex, 1).value = "No posted lines for this partner yet.";
   }
   for (const section of report.sections) {
-    const showUsd = section.lines.some((line) => line.usd);
-    const cols = headers(showUsd);
+    const codes = foreignCodes(section.lines);
+    const cols = headers(codes);
     sheet.mergeCells(rowIndex, 1, rowIndex, cols.length);
     const sectionCell = sheet.getCell(rowIndex, 1);
     sectionCell.value = section.title.toUpperCase();
@@ -143,7 +148,7 @@ export async function buildPartnerLedgerXlsx(report: PartnerLedgerFile) {
         line.ref,
         line.guest,
         line.label,
-        ...(showUsd ? [line.usd || null] : []),
+        ...codes.map((code) => (line.fcCode === code ? line.fcAmount || null : null)),
         line.debit || null,
         line.credit || null,
         line.balance,
@@ -153,12 +158,11 @@ export async function buildPartnerLedgerXlsx(report: PartnerLedgerFile) {
         cell.value = value;
         cell.font = { name: "Calibri", size: 10, color: { argb: "FF1C1915" } };
         cell.border = { top: border, left: border, bottom: border, right: border };
-        const moneyIndex = showUsd ? index >= 5 : index >= 4;
-        const usdIndex = showUsd && index === 4;
+        const foreignIndex = index >= 4 && index < 4 + codes.length;
         if (typeof value === "number") {
-          cell.numFmt = usdIndex ? "#,##0.00" : "#,##0.000;[Red]-#,##0.000";
+          cell.numFmt = foreignIndex ? "#,##0.00" : "#,##0.000;[Red]-#,##0.000";
           cell.alignment = { horizontal: "right" };
-        } else if (moneyIndex) {
+        } else if (index >= 4) {
           cell.alignment = { horizontal: "right" };
         }
       });

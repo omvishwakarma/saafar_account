@@ -122,7 +122,7 @@ const JournalSchema = new Schema(
     date: { type: Date, required: true },
     ref: { type: String, required: true },
     memo: { type: String, default: "" },
-    source: { type: String, enum: ["opening", "invoice", "payment", "receipt", "voucher"], required: true },
+    source: { type: String, enum: ["opening", "invoice", "payment", "receipt", "voucher", "manual"], required: true },
     sourceId: Schema.Types.ObjectId,
     state: { type: String, enum: ["posted"], default: "posted" },
     lines: { type: [JournalLineSchema], default: [] },

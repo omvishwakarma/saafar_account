@@ -51,11 +51,21 @@ export function VoucherForm({
 }) {
   const router = useRouter();
   const today = todayISO();
+  const startingSupplier = initial?.supplierId || suppliers[0]?.id || "";
+  const startingCustomer = initial?.customerId || customers[0]?.id || "";
+  function partnerCurrency(list: PartnerRow[], id: string) {
+    return list.find((partner) => partner.id === id)?.currency || "KWD";
+  }
+  function rateFor(code: string) {
+    return currencies.find((item) => item.code === code)?.rate || 1;
+  }
+  const supplierCode = initial?.supplierCurrency || partnerCurrency(suppliers, startingSupplier);
+  const customerCode = initial?.customerCurrency || partnerCurrency(customers, startingCustomer);
   const [form, setForm] = useState({
     date: initial?.date || today,
     paxName: initial?.paxName || "",
-    supplierId: initial?.supplierId || suppliers[0]?.id || "",
-    customerId: initial?.customerId || customers[0]?.id || "",
+    supplierId: startingSupplier,
+    customerId: startingCustomer,
     service: initial?.service || "HOTEL",
     city: initial?.city || "KUWAIT",
     consultant: initial?.consultant || "",
@@ -74,11 +84,11 @@ export function VoucherForm({
     roomView: initial?.roomView || "",
     details: { ...emptyDetails, ...initial?.details },
     supplierFc: initial?.supplierFc || 0,
-    supplierCurrency: initial?.supplierCurrency || "KWD",
-    supRoe: initial?.supRoe || 1,
+    supplierCurrency: supplierCode,
+    supRoe: initial?.supRoe || rateFor(supplierCode),
     customerFc: initial?.customerFc || 0,
-    customerCurrency: initial?.customerCurrency || "KWD",
-    custRoe: initial?.custRoe || 1,
+    customerCurrency: customerCode,
+    custRoe: initial?.custRoe || rateFor(customerCode),
     serviceFee: initial?.serviceFee || 0,
     commPercent: initial?.commPercent || 0,
     isReceived: initial?.isReceived || false,
@@ -140,7 +150,14 @@ export function VoucherForm({
             <Field label="Guest"><input className={inputClass} value={form.paxName} onChange={(event) => patch({ paxName: event.target.value })} placeholder="Pax name" /></Field>
             <Field label="City"><input className={inputClass} value={form.city} onChange={(event) => patch({ city: event.target.value.toUpperCase() })} /></Field>
             <Field label="Supplier">
-              <select className={inputClass} value={form.supplierId} onChange={(event) => patch({ supplierId: event.target.value })}>
+              <select
+                className={inputClass}
+                value={form.supplierId}
+                onChange={(event) => {
+                  const code = partnerCurrency(suppliers, event.target.value);
+                  patch({ supplierId: event.target.value, supplierCurrency: code, supRoe: rateFor(code) });
+                }}
+              >
                 {suppliers.map((partner) => <option key={partner.id} value={partner.id}>{partner.name}</option>)}
               </select>
             </Field>
@@ -150,7 +167,14 @@ export function VoucherForm({
               </select>
             </Field>
             <Field label="Customer">
-              <select className={inputClass} value={form.customerId} onChange={(event) => patch({ customerId: event.target.value })}>
+              <select
+                className={inputClass}
+                value={form.customerId}
+                onChange={(event) => {
+                  const code = partnerCurrency(customers, event.target.value);
+                  patch({ customerId: event.target.value, customerCurrency: code, custRoe: rateFor(code) });
+                }}
+              >
                 {customers.map((partner) => <option key={partner.id} value={partner.id}>{partner.name}</option>)}
               </select>
             </Field>

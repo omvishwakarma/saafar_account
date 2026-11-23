@@ -28,18 +28,25 @@ export default async function PartnersPage({ searchParams }: { searchParams: Pro
                 <th>Currency</th>
                 <th>Contact</th>
                 <th className="num">{role === "customer" ? "Receivable" : "Payable"}</th>
+                <th></th>
               </tr>
             </thead>
             <tbody>
               {rows.map((row) => (
                 <tr key={row.id}>
                   <td>
-                    <Link href={`/reports/partner-ledger?partner=${row.id}`} className="font-semibold hover:text-brass">{row.name}</Link>
+                    <Link href={`/partners/${row.id}`} className="font-semibold hover:text-brass">{row.name}</Link>
                   </td>
                   <td>{row.city}</td>
                   <td>{row.currency}</td>
                   <td className="text-muted">{row.email || row.phone}</td>
                   <td className="num"><Money amount={role === "customer" ? row.receivable : row.payable} /></td>
+                  <td className="text-right">
+                    <div className="flex justify-end gap-2">
+                      <Button href={`/partners/${row.id}`} variant="ghost">View</Button>
+                      <Button href={`/partners/${row.id}/edit`} variant="ghost">Edit</Button>
+                    </div>
+                  </td>
                 </tr>
               ))}
             </tbody>

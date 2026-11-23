@@ -3,12 +3,12 @@
 import { revalidatePath } from "next/cache";
 import { auditChange } from "./audit";
 import { MOVE_META } from "./company";
-import { assertPartnerRole, allocateReceipt, deleteMove, deletePayment, deleteReceipt, deleteVoucher, postMove, postPayment, postReceipt, reopenMove, reopenPayment, reopenReceipt, saveMove, savePayment, saveReceipt, saveVoucher } from "./accounting";
+import { assertPartnerRole, allocateReceipt, deleteMove, deletePayment, deleteReceipt, deleteVoucher, postManualJournal, postMove, postPayment, postReceipt, reopenMove, reopenPayment, reopenReceipt, saveMove, savePayment, saveReceipt, saveVoucher, setOpeningBalance } from "./accounting";
 import { db } from "./db";
-import { num } from "./money";
-import { Account, Currency, Move, Partner, Payment, Receipt, Voucher } from "./models";
+import { num, todayISO } from "./money";
+import { Account, Currency, JournalEntry, Move, Partner, Payment, Receipt, Voucher } from "./models";
 import { ensureSeed } from "./seed";
-import type { MoveInput, PartnerInput, PaymentInput, ReceiptInput, VoucherInput } from "./types";
+import type { JournalInput, MoveInput, PartnerInput, PaymentInput, ReceiptInput, VoucherInput } from "./types";
 
 function fail(error: unknown) {
   return { ok: false as const, error: error instanceof Error ? error.message : "Something went wrong" };
@@ -224,6 +224,7 @@ export async function actionSavePartner(input: PartnerInput) {
     await ensureSeed();
     const name = input.name.trim();
     if (!name) return { ok: false as const, error: "Name is required" };
+    const opening = num(input.openingAmount || 0, "Opening balance");
     const created = await Partner.create({
       name,
       role: input.role,
@@ -234,9 +235,55 @@ export async function actionSavePartner(input: PartnerInput) {
       currency: input.currency || "KWD",
       taxId: input.taxId.trim(),
     });
-    await auditChange(`Added ${input.role} ${name}`, String(created._id));
+    if (opening !== 0) {
+      try {
+        await setOpeningBalance({
+          partnerId: String(created._id),
+          role: input.role,
+          currency: input.currency || "KWD",
+          amount: opening,
+          date: input.openingDate || todayISO(),
+        });
+      } catch (error) {
+        await Partner.deleteOne({ _id: created._id });
+        throw error;
+      }
+    }
+    await auditChange(`Added ${input.role} ${name}${opening !== 0 ? ` with opening balance ${opening} ${input.currency || "KWD"}` : ""}`, String(created._id));
     refresh();
     return { ok: true as const, id: String(created._id) };
+  } catch (error) {
+    return fail(error);
+  }
+}
+
+export async function actionUpdatePartner(id: string, input: PartnerInput) {
+  try {
+    await ensureSeed();
+    const name = input.name.trim();
+    if (!name) return { ok: false as const, error: "Name is required" };
+    const partner = await Partner.findById(id);
+    if (!partner) return { ok: false as const, error: "Partner not found" };
+    const opening = num(input.openingAmount || 0, "Opening balance");
+    const currency = input.currency || "KWD";
+    await setOpeningBalance({
+      partnerId: id,
+      role: input.role,
+      currency,
+      amount: opening,
+      date: input.openingDate || todayISO(),
+    });
+    partner.name = name;
+    partner.email = input.email.trim();
+    partner.phone = input.phone.trim();
+    partner.city = input.city.trim();
+    partner.country = input.country.trim() || "Kuwait";
+    partner.currency = currency;
+    partner.taxId = input.taxId.trim();
+    await partner.save();
+    await auditChange(`Updated ${input.role} ${name}`, id);
+    refresh();
+    return { ok: true as const, id };
   } catch (error) {
     return fail(error);
   }
@@ -251,6 +298,86 @@ export async function actionUpdateRate(code: string, rate: number) {
     const updated = await Currency.updateOne({ code }, { rate: next });
     if (!updated.matchedCount) return { ok: false as const, error: "Currency not found" };
     await auditChange(`Changed ${code} rate to ${next}`);
+    refresh();
+    return { ok: true as const };
+  } catch (error) {
+    return fail(error);
+  }
+}
+
+export async function actionSaveCurrency(input: { code: string; name: string; rate: number }) {
+  try {
+    await db();
+    const code = input.code.trim().toUpperCase();
+    const name = input.name.trim();
+    const rate = num(input.rate, "Rate");
+    if (!/^[A-Z]{3}$/.test(code)) return { ok: false as const, error: "Code must be 3 letters, like THB" };
+    if (!name) return { ok: false as const, error: "Name is required" };
+    if (!(rate > 0)) return { ok: false as const, error: "Rate must be greater than zero" };
+    if (code === "KWD" && rate !== 1) return { ok: false as const, error: "Kuwaiti Dinar stays at 1" };
+    const existing = await Currency.findOne({ code });
+    if (existing) return { ok: false as const, error: `${code} is already in the list` };
+    await Currency.create({ code, name, rate });
+    await auditChange(`Added currency ${code} ${name} at ${rate}`);
+    refresh();
+    return { ok: true as const };
+  } catch (error) {
+    return fail(error);
+  }
+}
+
+export async function actionDeleteCurrency(code: string) {
+  try {
+    await db();
+    const normalized = code.trim().toUpperCase();
+    if (normalized === "KWD") return { ok: false as const, error: "Kuwaiti Dinar cannot be deleted" };
+    const currency = await Currency.findOne({ code: normalized });
+    if (!currency) return { ok: false as const, error: "Currency not found" };
+    const [partners, moves, payments, vouchers, receipts, journals] = await Promise.all([
+      Partner.countDocuments({ currency: normalized }),
+      Move.countDocuments({ currency: normalized }),
+      Payment.countDocuments({ currency: normalized }),
+      Voucher.countDocuments({ $or: [{ supplierCurrency: normalized }, { customerCurrency: normalized }] }),
+      Receipt.countDocuments({ "lines.currency": normalized }),
+      JournalEntry.countDocuments({ "lines.currency": normalized }),
+    ]);
+    if (partners || moves || payments || vouchers || receipts || journals) {
+      return { ok: false as const, error: `${normalized} is used on a customer, vendor, or document. It cannot be deleted.` };
+    }
+    await currency.deleteOne();
+    await auditChange(`Deleted currency ${normalized} ${currency.name}`);
+    refresh();
+    return { ok: true as const };
+  } catch (error) {
+    return fail(error);
+  }
+}
+
+export async function actionPostJournal(input: JournalInput) {
+  try {
+    await ensureSeed();
+    const entry = await postManualJournal(input);
+    await auditChange(`Posted journal ${entry.ref}`, String(entry._id));
+    refresh();
+    return { ok: true as const, id: String(entry._id) };
+  } catch (error) {
+    return fail(error);
+  }
+}
+
+export async function actionUpdateAccount(id: string, input: { code: string; name: string; type: string; subtype: string }) {
+  try {
+    await ensureSeed();
+    const code = input.code.trim();
+    const name = input.name.trim();
+    if (!code || !name) return { ok: false as const, error: "Code and name are required" };
+    const types = ["asset", "liability", "equity", "income", "expense"];
+    if (!types.includes(input.type)) return { ok: false as const, error: "Choose an account type" };
+    const taken = await Account.findOne({ code, _id: { $ne: id } });
+    if (taken) return { ok: false as const, error: "That code is already used" };
+    const updated = await Account.findByIdAndUpdate(id, { code, name, type: input.type, subtype: input.subtype });
+    if (!updated) return { ok: false as const, error: "Account not found" };
+    await auditChange(`Updated account ${code} ${name}`, id);
     refresh();
     return { ok: true as const };
   } catch (error) {

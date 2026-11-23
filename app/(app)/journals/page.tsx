@@ -1,11 +1,16 @@
 import { listJournals } from "@/lib/queries";
-import { Money, PageHeader, Panel, When } from "@/components/ui";
+import { Button, Money, PageHeader, Panel, When } from "@/components/ui";
 
 export default async function JournalsPage() {
   const rows = await listJournals();
   return (
     <div>
-      <PageHeader eyebrow="Ledger" title="Journal" sub="Every confirmed invoice, payment, voucher, and opening balance lands here. Debits and credits are in KWD." />
+      <PageHeader
+        eyebrow="Ledger"
+        title="Journal"
+        sub="Every confirmed invoice, payment, voucher, and opening balance lands here. Debits and credits are in KWD."
+        action={<Button href="/journals/new">New journal</Button>}
+      />
       <div className="space-y-3">
         {rows.map((row) => (
           <Panel key={row.id} className="px-4 py-3">

@@ -1,8 +1,9 @@
 import { MOVE_META } from "./company";
 import { db } from "./db";
-import { addDays, decimals, num, parseDate, round, toBase, voucherFigures } from "./money";
+import { addDays, decimals, isoDate, num, parseDate, round, toBase, voucherFigures } from "./money";
 import {
   Account,
+  Currency,
   JournalEntry,
   Move,
   Partner,
@@ -13,7 +14,7 @@ import {
 } from "./models";
 import { settle } from "./payment-math";
 import { voucherFileLabel } from "./voucher-detail";
-import type { MoveInput, MoveType, PaymentInput, ReceiptInput, VoucherInput } from "./types";
+import type { JournalInput, MoveInput, MoveType, PaymentInput, ReceiptInput, VoucherInput } from "./types";
 
 type JLine = {
   accountId: unknown;
@@ -248,6 +249,52 @@ export async function deleteMove(id: string) {
     await detachVoucher(move._id);
   }
   await move.deleteOne();
+}
+
+export async function setOpeningBalance(input: {
+  partnerId: string;
+  role: "customer" | "vendor" | "both";
+  currency: string;
+  amount: number;
+  date: string;
+}) {
+  await db();
+  const amount = round(input.amount, decimals(input.currency || "KWD"));
+  const date = input.date;
+  const rows = await Move.find({ partnerId: input.partnerId, narration: "Opening balance" });
+  const signOf = (moveType: string) => (moveType === "out_refund" || moveType === "in_refund" ? -1 : 1);
+  const current = round(rows.reduce((sum, move) => sum + signOf(move.moveType) * (move.amountTotal || 0), 0), decimals(input.currency || "KWD"));
+  const same =
+    (amount === 0 && rows.length === 0) ||
+    (rows.length === 1 && current === amount && rows[0].currency === input.currency && isoDate(rows[0].accountingDate) === date);
+  if (same) return;
+  const ids = rows.map((row) => row._id);
+  if (ids.length) {
+    const [payments, receipts] = await Promise.all([
+      Payment.countDocuments({ status: "posted", "allocations.moveId": { $in: ids } }),
+      Receipt.countDocuments({ status: "posted", "allocations.moveId": { $in: ids } }),
+    ]);
+    if (payments || receipts) throw new Error("Clear the receipt on the opening balance before changing it");
+  }
+  for (const row of rows) await deleteMove(String(row._id));
+  if (amount === 0) return;
+  const currency = await Currency.findOne({ code: input.currency || "KWD" });
+  const equity = await Account.findOne({ code: "30000" });
+  if (!currency) throw new Error("Currency not found");
+  if (!equity) throw new Error("Owner Capital account is missing");
+  const vendor = input.role === "vendor";
+  await saveMove({
+    moveType: vendor ? (amount < 0 ? "in_refund" : "in_invoice") : amount < 0 ? "out_refund" : "out_invoice",
+    partnerId: input.partnerId,
+    currency: currency.code,
+    rate: currency.rate,
+    invoiceDate: date,
+    accountingDate: date,
+    dueDate: date,
+    narration: "Opening balance",
+    lines: [{ label: "Opening balance", accountId: String(equity._id), qty: 1, price: Math.abs(amount), taxRate: 0 }],
+    post: true,
+  });
 }
 
 export async function savePayment(input: PaymentInput) {
@@ -877,6 +924,48 @@ export async function deleteReceipt(id: string) {
     await JournalEntry.deleteMany({ source: "receipt", sourceId: receipt._id });
   }
   await receipt.deleteOne();
+}
+
+export async function postManualJournal(input: JournalInput) {
+  await db();
+  const date = parseDate(input.date);
+  const memo = String(input.memo || "").trim();
+  const raw = (input.lines || []).filter((line) => line.accountId && ((Number(line.debit) || 0) !== 0 || (Number(line.credit) || 0) !== 0));
+  if (raw.length < 2) throw new Error("Add at least two lines");
+  const lines: JLine[] = [];
+  for (const line of raw) {
+    const debitFc = num(line.debit || 0, "Debit");
+    const creditFc = num(line.credit || 0, "Credit");
+    if (debitFc < 0 || creditFc < 0) throw new Error("Amounts cannot be negative");
+    if (debitFc > 0 && creditFc > 0) throw new Error("A line is either a debit or a credit");
+    const rate = num(line.rate, "Rate");
+    if (!(rate > 0)) throw new Error("Exchange rate must be greater than zero");
+    const amount = debitFc || creditFc;
+    if (!(amount > 0)) throw new Error("Each line needs an amount");
+    lines.push({
+      accountId: line.accountId,
+      ...(line.partnerId ? { partnerId: line.partnerId } : {}),
+      label: String(line.label || "").trim() || memo || "Journal",
+      debit: debitFc ? toBase(debitFc, rate) : 0,
+      credit: creditFc ? toBase(creditFc, rate) : 0,
+      currency: line.currency || "KWD",
+      amountCurrency: amount,
+      rate,
+    });
+  }
+  const debit = round(lines.reduce((sum, line) => sum + line.debit, 0), 3);
+  const credit = round(lines.reduce((sum, line) => sum + line.credit, 0), 3);
+  if (Math.abs(round(debit - credit, 3)) > 0.0005) {
+    throw new Error(`Entry does not balance (${debit.toFixed(3)} debit vs ${credit.toFixed(3)} credit)`);
+  }
+  const entry = await JournalEntry.create({
+    date,
+    ref: await nextNumber("JV"),
+    memo: memo || "Journal",
+    source: "manual",
+    lines: plug(lines),
+  });
+  return entry;
 }
 
 export async function booksBalance() {

@@ -40,9 +40,12 @@ export function PaymentForm({
   const [paymentType, setPaymentType] = useState<"receive" | "send">(initial?.paymentType || preset?.paymentType || "receive");
   const role = paymentType === "receive" ? "customer" : "vendor";
   const people = partners.filter((partner) => partner.role === role || partner.role === "both");
-  const [partnerId, setPartnerId] = useState(initial?.partnerId || preset?.partnerId || presetMove?.partnerId || people[0]?.id || "");
-  const [currency, setCurrency] = useState(initial?.currency || presetMove?.currency || "KWD");
-  const [rate, setRate] = useState(initial?.rate || presetMove?.rate || 1);
+  const startingPartnerId = initial?.partnerId || preset?.partnerId || presetMove?.partnerId || people[0]?.id || "";
+  const startingPartner = people.find((partner) => partner.id === startingPartnerId);
+  const startingCode = initial?.currency || presetMove?.currency || startingPartner?.currency || "KWD";
+  const [partnerId, setPartnerId] = useState(startingPartnerId);
+  const [currency, setCurrency] = useState(startingCode);
+  const [rate, setRate] = useState(initial?.rate || presetMove?.rate || currencies.find((item) => item.code === startingCode)?.rate || 1);
   const [amount, setAmount] = useState(initial?.amount ?? (presetMove?.residual || 0));
   const [accountId, setAccountId] = useState(initial?.accountId || banks[0]?.id || "");
   const [method, setMethod] = useState(initial?.method || "Bank transfer");
@@ -77,9 +80,17 @@ export function PaymentForm({
     return settle({ paymentType, currency, rate: Number(rate), amount: Number(amount), allocations });
   }, [allocations, amount, currency, paymentType, rate]);
 
+  function usePartnerCurrency(id: string) {
+    const code = people.find((partner) => partner.id === id)?.currency || "KWD";
+    setCurrency(code);
+    const found = currencies.find((item) => item.code === code);
+    if (found) setRate(found.rate);
+  }
+
   function choosePartner(next: string) {
     setPartnerId(next);
     setAlloc({});
+    usePartnerCurrency(next);
   }
 
   function submit(post: boolean) {
@@ -123,8 +134,13 @@ export function PaymentForm({
                   onChange={() => {
                     setPaymentType(type);
                     const nextPeople = partners.filter((partner) => partner.role === (type === "receive" ? "customer" : "vendor") || partner.role === "both");
-                    setPartnerId(nextPeople[0]?.id || "");
+                    const nextId = nextPeople[0]?.id || "";
+                    setPartnerId(nextId);
                     setAlloc({});
+                    const code = nextPeople[0]?.currency || "KWD";
+                    setCurrency(code);
+                    const found = currencies.find((item) => item.code === code);
+                    if (found) setRate(found.rate);
                   }}
                 />
                 {type === "receive" ? "Receive" : "Send"}

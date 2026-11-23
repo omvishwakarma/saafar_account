@@ -310,6 +310,43 @@ export async function listPartners(role: string, q: string) {
     });
 }
 
+export async function getPartner(id: string) {
+  await boot();
+  if (!mongoose.isValidObjectId(id)) return null;
+  const partner = await Partner.findById(id).lean();
+  if (!partner) return null;
+  const [moves, openings] = await Promise.all([
+    Move.find({ partnerId: partner._id, status: { $in: ["posted", "partial", "paid"] } }).lean(),
+    Move.find({ partnerId: partner._id, narration: "Opening balance" }).sort({ accountingDate: -1 }).lean(),
+  ]);
+  const receivable = round(
+    moves
+      .filter((move) => move.moveType === "out_invoice" || move.moveType === "out_refund")
+      .reduce((sum, move) => sum + (move.moveType === "out_invoice" ? move.residualLc : -move.residualLc), 0),
+    3,
+  );
+  const payable = round(
+    moves
+      .filter((move) => move.moveType === "in_invoice" || move.moveType === "in_refund")
+      .reduce((sum, move) => sum + (move.moveType === "in_invoice" ? move.residualLc : -move.residualLc), 0),
+    3,
+  );
+  const openingAmount = round(
+    openings.reduce((sum, move) => {
+      const sign = move.moveType === "out_refund" || move.moveType === "in_refund" ? -1 : 1;
+      return sum + sign * (move.amountTotal || 0);
+    }, 0),
+    3,
+  );
+  return {
+    ...serializePartner(partner),
+    receivable,
+    payable,
+    openingAmount,
+    openingDate: openings[0] ? isoDate(openings[0].accountingDate) : "",
+  };
+}
+
 export async function listVouchers() {
   await boot();
   const rows = await Voucher.find().populate("customerId", "name").populate("supplierId", "name").sort({ date: -1 }).lean();
@@ -898,14 +935,14 @@ export async function reportPartner(partnerId: string, asOf: string) {
   const moveById = new Map(linkedMoves.map((move) => [String(move._id), move]));
   const moveByNumber = new Map(linkedMoves.map((move) => [move.number, move]));
   const accountOf = new Map(accounts.map((account) => [String(account._id), account]));
-  const groups = new Map<string, { title: string; lines: { date: string; ref: string; href: string; guest: string; label: string; usd: number; debit: number; credit: number; balance: number }[] }>();
+  const groups = new Map<string, { title: string; lines: { date: string; ref: string; href: string; guest: string; label: string; fcCode: string; fcAmount: number; debit: number; credit: number; balance: number }[] }>();
   const running = new Map<string, number>();
   for (const entry of entries) {
     for (const line of entry.lines) {
       if (sid(line.partnerId) !== String(partner._id)) continue;
       const account = accountOf.get(sid(line.accountId));
       if (!account) continue;
-      if (account.type === "income" || account.type === "expense") continue;
+      if (account.type === "income" || account.type === "expense" || account.type === "equity") continue;
       if (account.subtype === "bank" || account.subtype === "cash") continue;
       const title = account.subtype === "receivable" ? "Receivable" : account.subtype === "payable" ? "Payable" : account.name;
       const key = title;
@@ -936,7 +973,8 @@ export async function reportPartner(partnerId: string, asOf: string) {
         href,
         guest: voucher?.paxName || "",
         label: serviceDetail || described || readableDetail(line.label || entry.memo || "", entry.ref),
-        usd: line.currency === "USD" ? line.amountCurrency || 0 : 0,
+        fcCode: line.currency && line.currency !== "KWD" ? line.currency : "",
+        fcAmount: line.currency && line.currency !== "KWD" ? line.amountCurrency || 0 : 0,
         debit: line.debit,
         credit: line.credit,
         balance: next,

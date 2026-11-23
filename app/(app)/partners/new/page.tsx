@@ -1,5 +1,6 @@
 import { PartnerForm } from "@/components/PartnerForm";
 import { PageHeader } from "@/components/ui";
+import { todayISO } from "@/lib/money";
 import { masters } from "@/lib/queries";
 
 export default async function NewPartnerPage({ searchParams }: { searchParams: Promise<{ role?: string }> }) {
@@ -9,7 +10,7 @@ export default async function NewPartnerPage({ searchParams }: { searchParams: P
   return (
     <div>
       <PageHeader eyebrow="Directory" title={role === "customer" ? "New customer" : "New vendor"} sub="The default currency is what new invoices suggest. You can still invoice them in another currency." />
-      <PartnerForm role={role} currencies={data.currencies} />
+      <PartnerForm role={role} currencies={data.currencies} today={todayISO()} />
     </div>
   );
 }

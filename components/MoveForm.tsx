@@ -39,9 +39,11 @@ export function MoveForm({
   const usableAccounts = accounts.filter((account) => account.type === (income ? "income" : "expense"));
   const usablePartners = partners.filter((partner) => partner.role === meta.partyRole || partner.role === "both");
   const today = todayISO();
-  const [partnerId, setPartnerId] = useState(initial?.partnerId || usablePartners[0]?.id || "");
-  const [currency, setCurrency] = useState(initial?.currency || "KWD");
-  const [rate, setRate] = useState(initial?.rate || 1);
+  const firstPartner = usablePartners.find((partner) => partner.id === initial?.partnerId) || usablePartners[0];
+  const firstCode = initial?.currency || firstPartner?.currency || "KWD";
+  const [partnerId, setPartnerId] = useState(firstPartner?.id || "");
+  const [currency, setCurrency] = useState(firstCode);
+  const [rate, setRate] = useState(initial?.rate || currencies.find((item) => item.code === firstCode)?.rate || 1);
   const [invoiceDate, setInvoiceDate] = useState(initial?.invoiceDate || today);
   const [accountingDate, setAccountingDate] = useState(initial?.accountingDate || today);
   const [dueDate, setDueDate] = useState(initial?.dueDate || addDays(today, 7));
@@ -108,7 +110,18 @@ export function MoveForm({
     >
       <div className="grid gap-4 rounded-2xl border border-line bg-paper p-5 md:grid-cols-4">
         <Field label={meta.party}>
-          <select className={inputClass} value={partnerId} onChange={(event) => setPartnerId(event.target.value)}>
+          <select
+            className={inputClass}
+            value={partnerId}
+            onChange={(event) => {
+              const id = event.target.value;
+              const code = usablePartners.find((partner) => partner.id === id)?.currency || "KWD";
+              setPartnerId(id);
+              setCurrency(code);
+              const found = currencies.find((item) => item.code === code);
+              if (found) setRate(found.rate);
+            }}
+          >
             {usablePartners.map((partner) => (
               <option key={partner.id} value={partner.id}>{partner.name}</option>
             ))}
