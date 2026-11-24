@@ -106,9 +106,12 @@ export async function saveMove(input: MoveInput) {
     Object.assign(move, fields);
     await move.save();
   } else {
+    const requested = String(input.number || "").trim();
+    const number = requested || (await nextNumber(MOVE_META[input.moveType].prefix));
+    if (requested && (await Move.exists({ number }))) throw new Error(`${number} is already used`);
     const created = await Move.create({
       ...fields,
-      number: await nextNumber(MOVE_META[input.moveType].prefix),
+      number,
       status: "draft",
     });
     id = String(created._id);
@@ -662,6 +665,14 @@ export async function confirmVoucher(id: string) {
     });
   }
 
+  const invoiceNumber = voucher.customerRef.trim();
+  const billNumber = voucher.supplierRef.trim();
+  if (!invoiceNumber) throw new Error("Enter the invoice number in Customer ref");
+  if (!billNumber) throw new Error("Enter the bill number in Supplier ref");
+  if (invoiceNumber === billNumber) throw new Error("Invoice number and bill number must be different");
+  const taken = await Move.findOne({ number: { $in: [invoiceNumber, billNumber] } }).select("number");
+  if (taken) throw new Error(`${taken.number} is already used`);
+
   const invoiceId = await saveMove({
     moveType: "out_invoice",
     partnerId: String(voucher.customerId),
@@ -671,29 +682,37 @@ export async function confirmVoucher(id: string) {
     accountingDate: date,
     dueDate: due,
     narration: `From voucher ${voucher.number}`,
+    number: invoiceNumber,
     lines: invoiceLines,
     post: true,
   });
-  const billId = await saveMove({
-    moveType: "in_invoice",
-    partnerId: String(voucher.supplierId),
-    currency: voucher.supplierCurrency,
-    rate: voucher.supRoe,
-    invoiceDate: date,
-    accountingDate: date,
-    dueDate: due,
-    narration: `From voucher ${voucher.number}`,
-    lines: [
-      {
-        label,
-        accountId: String(cost._id),
-        qty: 1,
-        price: voucher.supplierFc,
-        taxRate: 0,
-      },
-    ],
-    post: true,
-  });
+  let billId: string;
+  try {
+    billId = await saveMove({
+      moveType: "in_invoice",
+      partnerId: String(voucher.supplierId),
+      currency: voucher.supplierCurrency,
+      rate: voucher.supRoe,
+      invoiceDate: date,
+      accountingDate: date,
+      dueDate: due,
+      narration: `From voucher ${voucher.number}`,
+      number: billNumber,
+      lines: [
+        {
+          label,
+          accountId: String(cost._id),
+          qty: 1,
+          price: voucher.supplierFc,
+          taxRate: 0,
+        },
+      ],
+      post: true,
+    });
+  } catch (error) {
+    await deleteMove(invoiceId);
+    throw error;
+  }
 
   const invoice = await Move.findById(invoiceId);
   const bill = await Move.findById(billId);

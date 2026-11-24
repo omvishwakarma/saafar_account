@@ -184,8 +184,9 @@ export function VoucherForm({
               </select>
             </Field>
             <Field label="Consultant"><input className={inputClass} value={form.consultant} onChange={(event) => patch({ consultant: event.target.value })} /></Field>
-            <Field label="Supplier ref"><input className={inputClass} value={form.supplierRef} onChange={(event) => patch({ supplierRef: event.target.value })} /></Field>
-            <Field label="Customer ref"><input className={inputClass} value={form.customerRef} onChange={(event) => patch({ customerRef: event.target.value })} /></Field>
+            <Field label="Supplier ref"><input className={inputClass} value={form.supplierRef} onChange={(event) => patch({ supplierRef: event.target.value })} placeholder="Bill number" /></Field>
+            <Field label="Customer ref"><input className={inputClass} value={form.customerRef} onChange={(event) => patch({ customerRef: event.target.value })} placeholder="Invoice number" /></Field>
+            <p className="text-sm text-muted md:col-span-3">Supplier ref is the bill number. Customer ref is the invoice number. Type both before confirming. They are not generated automatically.</p>
           </div>
         </section>
 
@@ -291,7 +292,7 @@ export function VoucherForm({
           <Row label="Margin" value={`${figures.margin.toFixed(1)}%`} />
         </dl>
         <p className="mt-4 text-xs leading-relaxed text-sand/60">
-          Confirming posts a customer invoice and a supplier bill. Commission is a memo for the consultant and is not posted twice.
+          Confirming posts a customer invoice using Customer ref and a supplier bill using Supplier ref. Those numbers are not generated automatically. Commission is a memo for the consultant and is not posted twice.
         </p>
       </aside>
     </form>

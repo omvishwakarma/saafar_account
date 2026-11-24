@@ -19,6 +19,7 @@ export type MoveInput = {
   dueDate: string;
   narration: string;
   lines: MoveLineInput[];
+  number?: string;
   post?: boolean;
 };
 
