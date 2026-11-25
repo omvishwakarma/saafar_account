@@ -809,9 +809,7 @@ export async function reportAged(kind: "receivable" | "payable", asOf: string) {
   const asOfTime = new Date(`${asOf}T12:00:00.000Z`).getTime();
   type Bucket = { current: number; d30: number; d60: number; d90: number; d90p: number; total: number };
   const empty = (): Bucket => ({ current: 0, d30: 0, d60: 0, d90: 0, d90p: 0, total: 0 });
-  const cards = await voucherCards();
   const partners = new Map<string, { name: string; bucket: Bucket }>();
-  const documents: { id: string; number: string; partner: string; guest: string; detail: string; open: number }[] = [];
   for (const row of rows) {
     const sign = row.moveType === refundType ? -1 : 1;
     const amount = round(row.residualLc * sign, 3);
@@ -822,17 +820,7 @@ export async function reportAged(kind: "receivable" | "payable", asOf: string) {
     entry.bucket[slot] = round(entry.bucket[slot] + amount, 3);
     entry.bucket.total = round(entry.bucket.total + amount, 3);
     partners.set(key, entry);
-    const primary = cardFor(cards, String(row._id), row.origin || "");
-    documents.push({
-      id: String(row._id),
-      number: row.number,
-      partner: entry.name,
-      guest: primary.guest,
-      detail: primary.detail,
-      open: amount,
-    });
   }
-  documents.sort((a, b) => a.partner.localeCompare(b.partner) || a.number.localeCompare(b.number));
   const list = [...partners.values()].filter((row) => row.bucket.total !== 0).sort((a, b) => a.name.localeCompare(b.name));
   const totals = empty();
   for (const row of list) {
@@ -843,7 +831,7 @@ export async function reportAged(kind: "receivable" | "payable", asOf: string) {
     totals.d90p = round(totals.d90p + row.bucket.d90p, 3);
     totals.total = round(totals.total + row.bucket.total, 3);
   }
-  return { kind, asOf, rows: list, totals, documents };
+  return { kind, asOf, rows: list, totals };
 }
 
 export async function reportCash(from: string, to: string) {
