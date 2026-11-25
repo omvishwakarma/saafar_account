@@ -18,16 +18,16 @@ export default async function BalanceSheetPage({ searchParams }: { searchParams:
           </p>
         )}
         <Section title="Assets" />
-        <Group title="Current assets" rows={report.currentAssets} />
-        <Group title="Fixed assets" rows={report.fixedAssets} />
-        <Group title="Non-current assets" rows={report.otherAssets} />
+        <Group title="Current assets" rows={report.currentAssets} asOf={asOf} />
+        <Group title="Fixed assets" rows={report.fixedAssets} asOf={asOf} />
+        <Group title="Non-current assets" rows={report.otherAssets} asOf={asOf} />
         <Total label="Total assets" amount={report.assets} />
         <Section title="Liabilities" />
-        <Group title="Current liabilities" rows={report.currentLiabilities} />
-        <Group title="Non-current liabilities" rows={report.otherLiabilities} />
+        <Group title="Current liabilities" rows={report.currentLiabilities} asOf={asOf} />
+        <Group title="Non-current liabilities" rows={report.otherLiabilities} asOf={asOf} />
         <Total label="Total liabilities" amount={report.liabilities} />
         <Section title="Equity" />
-        <Group title="Capital" rows={report.equity} />
+        <Group title="Capital" rows={report.equity} asOf={asOf} />
         <div className="flex justify-between border-b border-line py-2 text-sm">
           <span>Current year earnings</span>
           <Money amount={report.earnings} />
@@ -46,14 +46,21 @@ function Section({ title }: { title: string }) {
   return <h2 className="mt-6 bg-sand px-3 py-2 text-xs font-semibold uppercase tracking-[0.16em]">{title}</h2>;
 }
 
-function Group({ title, rows }: { title: string; rows: StatementRow[] }) {
+function accountHref(row: StatementRow, asOf: string) {
+  const date = `asOf=${asOf}`;
+  if (row.code === "11000" || row.subtype === "receivable") return `/reports/aged-receivable?${date}`;
+  if (row.code === "20000" || row.subtype === "payable") return `/reports/aged-payable?${date}`;
+  return `/reports/ledger?account=${row.id}&asOf=${asOf}`;
+}
+
+function Group({ title, rows, asOf }: { title: string; rows: StatementRow[]; asOf: string }) {
   const total = rows.reduce((sum, row) => sum + row.balance, 0);
   if (!rows.length) return null;
   return (
     <div className="mt-3">
       <h3 className="text-sm font-semibold text-muted">{title}</h3>
       {rows.map((row) => (
-        <Link key={row.id} href={`/reports/ledger?account=${row.id}`} className="flex justify-between gap-4 border-b border-line/70 py-1.5 text-sm hover:text-brass">
+        <Link key={row.id} href={accountHref(row, asOf)} className="flex justify-between gap-4 border-b border-line/70 py-1.5 text-sm hover:text-brass">
           <span>{row.code} · {row.name}</span>
           <Money amount={row.balance} />
         </Link>

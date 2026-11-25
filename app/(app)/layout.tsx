@@ -1,5 +1,6 @@
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
+import { IdleLogout } from "@/components/IdleLogout";
 import { Shell } from "@/components/Shell";
 import { db } from "@/lib/db";
 import { User } from "@/lib/models";
@@ -15,5 +16,10 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     const row = await User.findById(user.id).select("name").lean();
     if (row?.name) name = row.name;
   }
-  return <Shell user={{ ...user, name }}>{children}</Shell>;
+  return (
+    <>
+      <IdleLogout />
+      <Shell user={{ ...user, name }}>{children}</Shell>
+    </>
+  );
 }
