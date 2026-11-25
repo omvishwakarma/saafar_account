@@ -821,6 +821,30 @@ export async function reportAged(kind: "receivable" | "payable", asOf: string) {
     entry.bucket.total = round(entry.bucket.total + amount, 3);
     partners.set(key, entry);
   }
+  const control = await Account.findOne({ code: kind === "receivable" ? "11000" : "20000" }).select("_id").lean();
+  if (control) {
+    const journals = await JournalEntry.find({
+      source: { $in: ["manual", "opening"] },
+      date: { $lte: endOf(asOf) },
+      "lines.accountId": control._id,
+    }).lean();
+    const ids = [...new Set(journals.flatMap((entry) => entry.lines.map((line) => sid(line.partnerId))).filter(Boolean))];
+    const named = new Map((await Partner.find({ _id: { $in: ids } }).select("name").lean()).map((row) => [String(row._id), row.name]));
+    for (const entry of journals) {
+      const days = Math.floor((asOfTime - new Date(entry.date).getTime()) / 86400000);
+      const slot = days <= 0 ? "current" : days <= 30 ? "d30" : days <= 60 ? "d60" : days <= 90 ? "d90" : "d90p";
+      for (const line of entry.lines) {
+        if (String(line.accountId) !== String(control._id) || !line.partnerId) continue;
+        const amount = round(kind === "receivable" ? (line.debit || 0) - (line.credit || 0) : (line.credit || 0) - (line.debit || 0), 3);
+        if (!amount) continue;
+        const key = sid(line.partnerId);
+        const card = partners.get(key) || { name: named.get(key) || "Partner", bucket: empty() };
+        card.bucket[slot] = round(card.bucket[slot] + amount, 3);
+        card.bucket.total = round(card.bucket.total + amount, 3);
+        partners.set(key, card);
+      }
+    }
+  }
   const list = [...partners.values()].filter((row) => row.bucket.total !== 0).sort((a, b) => a.name.localeCompare(b.name));
   const totals = empty();
   for (const row of list) {
