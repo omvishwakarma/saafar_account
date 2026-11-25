@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { VoucherRowActions } from "@/components/VoucherActions";
 import { listVouchers } from "@/lib/queries";
 import { Button, Money, PageHeader, Panel, Status, When } from "@/components/ui";
 
@@ -26,6 +27,7 @@ export default async function VouchersPage() {
                 <th className="num">Sell KWD</th>
                 <th className="num">Markup</th>
                 <th>Status</th>
+                <th></th>
               </tr>
             </thead>
             <tbody>
@@ -40,6 +42,7 @@ export default async function VouchersPage() {
                   <td className="num"><Money amount={row.sellValue} /></td>
                   <td className="num"><Money amount={row.markup} /></td>
                   <td><Status value={row.status} /></td>
+                  <td className="text-right"><VoucherRowActions id={row.id} number={row.number} /></td>
                 </tr>
               ))}
             </tbody>

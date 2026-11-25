@@ -14,7 +14,8 @@ export default async function JournalsPage() {
       <div className="space-y-3">
         {rows.map((row) => (
           <Panel key={row.id} className="px-4 py-3">
-            <details>
+            <div className="flex items-start gap-3">
+            <details className="min-w-0 flex-1">
               <summary className="flex cursor-pointer list-none flex-wrap items-center justify-between gap-3">
                 <div>
                   <div className="font-semibold">{row.ref}</div>
@@ -38,6 +39,8 @@ export default async function JournalsPage() {
                 </tbody>
               </table>
             </details>
+            <Button href={`/journals/${row.id}`} variant="ghost" className="shrink-0">Edit</Button>
+            </div>
           </Panel>
         ))}
       </div>

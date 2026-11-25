@@ -1,8 +1,9 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { PrintButton } from "@/components/PrintButton";
+import { VoucherDelete } from "@/components/VoucherActions";
 import { VoucherForm } from "@/components/VoucherForm";
-import { Money, PageHeader, Panel, Status, When } from "@/components/ui";
+import { Button, Money, PageHeader, Panel, Status, When } from "@/components/ui";
 import { getVoucher, masters } from "@/lib/queries";
 
 export default async function VoucherPage({ params }: { params: Promise<{ id: string }> }) {
@@ -58,7 +59,18 @@ export default async function VoucherPage({ params }: { params: Promise<{ id: st
   }
   return (
     <div className="mx-auto max-w-3xl">
-      <PageHeader eyebrow="Travel voucher" title={voucher.number} sub={`${voucher.service} · ${voucher.city}`} action={<PrintButton />} />
+      <PageHeader
+        eyebrow="Travel voucher"
+        title={voucher.number}
+        sub={`${voucher.service} · ${voucher.city}`}
+        action={
+          <>
+            <Button href={`/vouchers/${voucher.id}/edit`}>Edit</Button>
+            <VoucherDelete id={voucher.id} number={voucher.number} />
+            <PrintButton />
+          </>
+        }
+      />
       <Panel className="p-6 md:p-8">
         <div className="flex items-start justify-between">
           <div>

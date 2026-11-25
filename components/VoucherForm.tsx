@@ -43,11 +43,13 @@ export function VoucherForm({
   suppliers,
   currencies,
   initial,
+  posted = false,
 }: {
   customers: PartnerRow[];
   suppliers: PartnerRow[];
   currencies: CurrencyRow[];
   initial?: Partial<VoucherInput> & { id?: string };
+  posted?: boolean;
 }) {
   const router = useRouter();
   const today = todayISO();
@@ -259,13 +261,14 @@ export function VoucherForm({
         </section>
         {error && <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-800">{error}</p>}
         <div className="flex flex-wrap gap-2">
-          <Button type="submit" variant="ghost" disabled={pending}>Save draft</Button>
-          <Button type="button" disabled={pending} onClick={() => submit(true)}>{pending ? "Posting…" : "Confirm voucher"}</Button>
+          {!posted && <Button type="submit" variant="ghost" disabled={pending}>Save draft</Button>}
+          <Button type="button" disabled={pending} onClick={() => submit(true)}>{pending ? "Saving…" : posted ? "Save changes" : "Confirm voucher"}</Button>
           {initial?.id && (
             <Button
               variant="danger"
               disabled={pending}
               onClick={() => {
+                if (!window.confirm(posted ? "Delete this voucher? Its invoice and bill will be removed." : "Delete this draft?")) return;
                 start(async () => {
                   const result = await actionDeleteVoucher(initial.id!);
                   if (!result.ok) setError(result.error);
@@ -273,7 +276,7 @@ export function VoucherForm({
                 });
               }}
             >
-              Delete draft
+              {posted ? "Delete" : "Delete draft"}
             </Button>
           )}
         </div>

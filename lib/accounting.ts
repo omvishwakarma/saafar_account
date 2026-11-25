@@ -207,7 +207,11 @@ export async function postMove(id: string) {
 }
 
 async function paymentsOn(moveId: unknown) {
-  return Payment.countDocuments({ status: "posted", "allocations.moveId": moveId });
+  const [payments, receipts] = await Promise.all([
+    Payment.countDocuments({ status: "posted", "allocations.moveId": moveId }),
+    Receipt.countDocuments({ status: "posted", "allocations.moveId": moveId }),
+  ]);
+  return payments + receipts;
 }
 
 async function detachVoucher(moveId: unknown) {
@@ -613,7 +617,11 @@ export async function saveVoucher(input: VoucherInput) {
   if (id) {
     const voucher = await Voucher.findById(id);
     if (!voucher) throw new Error("Voucher not found");
-    if (voucher.status !== "draft") throw new Error("Confirmed vouchers stay as posted");
+    if (voucher.status !== "draft") {
+      if (!input.post) throw new Error("This voucher is already confirmed. Save the changes to update the invoice and bill.");
+      await replaceConfirmedVoucher(id, fields);
+      return id;
+    }
     Object.assign(voucher, fields);
     await voucher.save();
   } else {
@@ -730,12 +738,40 @@ export async function confirmVoucher(id: string) {
   await voucher.save();
 }
 
+async function replaceConfirmedVoucher(id: string, fields: { customerRef: string; supplierRef: string }) {
+  const voucher = await Voucher.findById(id);
+  if (!voucher) throw new Error("Voucher not found");
+  const invoiceNumber = String(fields.customerRef || "").trim();
+  const billNumber = String(fields.supplierRef || "").trim();
+  if (!invoiceNumber) throw new Error("Enter the invoice number in Customer ref");
+  if (!billNumber) throw new Error("Enter the bill number in Supplier ref");
+  if (invoiceNumber === billNumber) throw new Error("Invoice number and bill number must be different");
+  const own = [voucher.invoiceId, voucher.billId].filter(Boolean);
+  const taken = await Move.findOne({ number: { $in: [invoiceNumber, billNumber] }, _id: { $nin: own } }).select("number");
+  if (taken) throw new Error(`${taken.number} is already used`);
+  for (const moveId of own) {
+    if (await paymentsOn(moveId)) throw new Error("Clear the receipt on this voucher before changing it");
+  }
+  for (const moveId of own) await deleteMove(String(moveId));
+  const current = await Voucher.findById(id);
+  if (!current) throw new Error("Voucher not found");
+  Object.assign(current, fields);
+  current.status = "draft";
+  await current.save();
+  await confirmVoucher(id);
+}
+
 export async function deleteVoucher(id: string) {
   await db();
   const voucher = await Voucher.findById(id);
   if (!voucher) throw new Error("Voucher not found");
-  if (voucher.status !== "draft") throw new Error("Confirmed vouchers stay in the books");
-  await voucher.deleteOne();
+  const moveIds = [voucher.invoiceId, voucher.billId].filter(Boolean).map((value) => String(value));
+  for (const moveId of moveIds) {
+    if (await paymentsOn(moveId)) throw new Error("Clear the receipt on this voucher before deleting it");
+  }
+  for (const moveId of moveIds) await deleteMove(moveId);
+  const current = await Voucher.findById(id);
+  if (current) await current.deleteOne();
 }
 
 export async function saveReceipt(input: ReceiptInput) {
@@ -945,9 +981,7 @@ export async function deleteReceipt(id: string) {
   await receipt.deleteOne();
 }
 
-export async function postManualJournal(input: JournalInput) {
-  await db();
-  const date = parseDate(input.date);
+function journalLinesFrom(input: JournalInput) {
   const memo = String(input.memo || "").trim();
   const raw = (input.lines || []).filter((line) => line.accountId && ((Number(line.debit) || 0) !== 0 || (Number(line.credit) || 0) !== 0));
   if (raw.length < 2) throw new Error("Add at least two lines");
@@ -977,13 +1011,60 @@ export async function postManualJournal(input: JournalInput) {
   if (Math.abs(round(debit - credit, 3)) > 0.0005) {
     throw new Error(`Entry does not balance (${debit.toFixed(3)} debit vs ${credit.toFixed(3)} credit)`);
   }
+  return { date: parseDate(input.date), memo: memo || "Journal", lines: plug(lines) };
+}
+
+async function syncMoveFromJournal(entry: { sourceId?: unknown; date: Date; memo?: string; lines: JLine[] }) {
+  const move = await Move.findById(entry.sourceId);
+  if (!move || move.status === "draft") return;
+  const code = move.moveType === "out_invoice" || move.moveType === "out_refund" ? "11000" : "20000";
+  const control = await Account.findOne({ code });
+  if (!control) return;
+  const controlLines = entry.lines.filter((line) => String(line.accountId) === String(control._id));
+  const lc = round(controlLines.reduce((sum, line) => sum + (line.debit || line.credit || 0), 0), 3);
+  const fc = round(controlLines.reduce((sum, line) => sum + (line.amountCurrency || 0), 0), 3);
+  const partnerId = controlLines.find((line) => line.partnerId)?.partnerId;
+  move.amountTotalLc = lc;
+  move.residualLc = lc;
+  if (fc > 0) {
+    move.amountTotal = fc;
+    move.residual = fc;
+  }
+  move.accountingDate = entry.date;
+  move.invoiceDate = entry.date;
+  if (entry.memo) move.narration = entry.memo;
+  if (partnerId) move.partnerId = partnerId;
+  if (move.status === "partial" || move.status === "paid") move.status = "posted";
+  await move.save();
+}
+
+export async function postManualJournal(input: JournalInput) {
+  await db();
+  const built = journalLinesFrom(input);
   const entry = await JournalEntry.create({
-    date,
+    date: built.date,
     ref: await nextNumber("JV"),
-    memo: memo || "Journal",
+    memo: built.memo,
     source: "manual",
-    lines: plug(lines),
+    lines: built.lines,
   });
+  return entry;
+}
+
+export async function updateJournal(id: string, input: JournalInput) {
+  await db();
+  const entry = await JournalEntry.findById(id);
+  if (!entry) throw new Error("Journal not found");
+  if (entry.source === "invoice" && entry.sourceId && (await paymentsOn(entry.sourceId))) {
+    throw new Error("Clear the receipt on this document before editing the journal");
+  }
+  const built = journalLinesFrom(input);
+  entry.date = built.date;
+  entry.memo = built.memo;
+  entry.lines = built.lines;
+  entry.markModified("lines");
+  await entry.save();
+  if (entry.source === "invoice" && entry.sourceId) await syncMoveFromJournal(entry);
   return entry;
 }
 

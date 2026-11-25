@@ -2,7 +2,7 @@
 
 import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { actionPostJournal } from "@/lib/actions";
+import { actionPostJournal, actionUpdateJournal } from "@/lib/actions";
 import { round, toBase } from "@/lib/money";
 import type { AccountRow, CurrencyRow, PartnerRow } from "@/lib/types";
 import { Button, Field, inputClass } from "./ui";
@@ -32,17 +32,37 @@ export function JournalForm({
   partners,
   currencies,
   today,
+  initial,
 }: {
   accounts: AccountRow[];
   partners: PartnerRow[];
   currencies: CurrencyRow[];
   today: string;
+  initial?: {
+    id: string;
+    ref: string;
+    date: string;
+    memo: string;
+    lines: { accountId: string; partnerId: string; label: string; currency: string; rate: number; debit: number; credit: number }[];
+  };
 }) {
   const router = useRouter();
   const kwd = currencies.find((row) => row.code === "KWD");
-  const [date, setDate] = useState(today);
-  const [memo, setMemo] = useState("");
-  const [lines, setLines] = useState<Line[]>([blank(kwd), blank(kwd)]);
+  const [date, setDate] = useState(initial?.date || today);
+  const [memo, setMemo] = useState(initial?.memo || "");
+  const [lines, setLines] = useState<Line[]>(
+    initial?.lines.length
+      ? initial.lines.map((line) => ({
+          accountId: line.accountId,
+          partnerId: line.partnerId,
+          label: line.label,
+          currency: line.currency,
+          rate: String(line.rate),
+          debit: line.debit ? String(line.debit) : "",
+          credit: line.credit ? String(line.credit) : "",
+        }))
+      : [blank(kwd), blank(kwd)],
+  );
   const [error, setError] = useState("");
   const [pending, start] = useTransition();
 
@@ -64,7 +84,7 @@ export function JournalForm({
   function save() {
     setError("");
     start(async () => {
-      const result = await actionPostJournal({
+      const payload = {
         date,
         memo,
         lines: lines.map((line) => ({
@@ -76,7 +96,8 @@ export function JournalForm({
           debit: Number(line.debit) || 0,
           credit: Number(line.credit) || 0,
         })),
-      });
+      };
+      const result = initial ? await actionUpdateJournal(initial.id, payload) : await actionPostJournal(payload);
       if (!result.ok) setError(result.error);
       else router.push("/journals");
     });
@@ -145,7 +166,7 @@ export function JournalForm({
         </div>
       </div>
       {error && <p className="mt-3 text-sm text-red-800">{error}</p>}
-      <Button className="mt-4" disabled={pending} onClick={save}>{pending ? "Posting…" : "Post journal"}</Button>
+      <Button className="mt-4" disabled={pending} onClick={save}>{pending ? "Saving…" : initial ? "Save changes" : "Post journal"}</Button>
     </div>
   );
 }

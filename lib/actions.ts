@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { auditChange } from "./audit";
 import { MOVE_META } from "./company";
-import { assertPartnerRole, allocateReceipt, deleteMove, deletePayment, deleteReceipt, deleteVoucher, postManualJournal, postMove, postPayment, postReceipt, reopenMove, reopenPayment, reopenReceipt, saveMove, savePayment, saveReceipt, saveVoucher, setOpeningBalance } from "./accounting";
+import { assertPartnerRole, allocateReceipt, deleteMove, deletePayment, deleteReceipt, deleteVoucher, postManualJournal, postMove, postPayment, postReceipt, reopenMove, reopenPayment, reopenReceipt, saveMove, savePayment, saveReceipt, saveVoucher, setOpeningBalance, updateJournal } from "./accounting";
 import { db } from "./db";
 import { num, todayISO } from "./money";
 import { Account, Currency, JournalEntry, Move, Partner, Payment, Receipt, Voucher } from "./models";
@@ -147,7 +147,7 @@ export async function actionDeleteVoucher(id: string) {
   try {
     const number = await numberOf(Voucher, id);
     await deleteVoucher(id);
-    await auditChange(`Deleted draft voucher ${number}`, id);
+    await auditChange(`Deleted voucher ${number}`, id);
     refresh();
     return { ok: true as const };
   } catch (error) {
@@ -358,6 +358,18 @@ export async function actionPostJournal(input: JournalInput) {
     await ensureSeed();
     const entry = await postManualJournal(input);
     await auditChange(`Posted journal ${entry.ref}`, String(entry._id));
+    refresh();
+    return { ok: true as const, id: String(entry._id) };
+  } catch (error) {
+    return fail(error);
+  }
+}
+
+export async function actionUpdateJournal(id: string, input: JournalInput) {
+  try {
+    await ensureSeed();
+    const entry = await updateJournal(id, input);
+    await auditChange(`Updated journal ${entry.ref}`, String(entry._id));
     refresh();
     return { ok: true as const, id: String(entry._id) };
   } catch (error) {

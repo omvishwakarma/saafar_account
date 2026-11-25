@@ -539,6 +539,29 @@ export async function listJournals() {
   }));
 }
 
+export async function getJournal(id: string) {
+  await boot();
+  if (!mongoose.isValidObjectId(id)) return null;
+  const entry = await JournalEntry.findById(id).lean();
+  if (!entry) return null;
+  return {
+    id: String(entry._id),
+    date: isoDate(entry.date),
+    ref: entry.ref,
+    memo: entry.memo || "",
+    source: entry.source,
+    lines: entry.lines.map((line) => ({
+      accountId: sid(line.accountId),
+      partnerId: sid(line.partnerId),
+      label: line.label || "",
+      currency: line.currency || "KWD",
+      rate: line.rate || 1,
+      debit: line.debit > 0 ? line.amountCurrency || line.debit : 0,
+      credit: line.credit > 0 ? line.amountCurrency || line.credit : 0,
+    })),
+  };
+}
+
 type Sum = { _id: unknown; debit: number; credit: number };
 
 async function sumsByAccount(match: Record<string, unknown> = {}) {
